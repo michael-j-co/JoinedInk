@@ -1,0 +1,118 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // User can organize multiple events
+  events    Event[]
+  
+  @@map("users")
+}
+
+enum EventType {
+  INDIVIDUAL_TRIBUTE
+  CIRCLE_NOTES
+}
+
+enum EventStatus {
+  OPEN
+  CLOSED
+}
+
+model Event {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  eventType   EventType
+  status      EventStatus @default(OPEN)
+  deadline    DateTime
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Event belongs to one organizer
+  organizerId String
+  organizer   User   @relation(fields: [organizerId], references: [id])
+  
+  // Event can have multiple recipients
+  recipients    Recipient[]
+  contributions Contribution[]
+  
+  @@map("events")
+}
+
+model Recipient {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  accessToken String @unique // Unique token for accessing their keepsake book
+  createdAt DateTime @default(now())
+  
+  // Recipient belongs to one event
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id])
+  
+  // Recipient can have multiple contributions written for them
+  contributions Contribution[]
+  
+  @@map("recipients")
+}
+
+model Contribution {
+  id        String   @id @default(cuid())
+  content   String   // Rich text content
+  
+  // Optional contributor information
+  contributorName String?
+  contributorToken String // Anonymous access token
+  
+  // Styling and media
+  fontFamily   String?
+  backgroundColor String?
+  signature    String? // Base64 encoded signature image
+  images       String[] // Array of image URLs
+  stickers     String[] // Array of sticker identifiers
+  drawings     String? // Base64 encoded drawing
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Contribution belongs to one event and one recipient
+  eventId     String
+  event       Event     @relation(fields: [eventId], references: [id])
+  recipientId String
+  recipient   Recipient @relation(fields: [recipientId], references: [id])
+  
+  @@map("contributions")
+}
+
+model ContributorSession {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  eventId   String
+  
+  // For circle notes - track which recipients this contributor has written for
+  completedRecipients String[] // Array of recipient IDs
+  
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  
+  @@map("contributor_sessions")
+}
