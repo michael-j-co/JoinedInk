@@ -36,6 +36,7 @@ function App() {
               
               {/* Contributor routes */}
               <Route path="/contribute/:token" element={<ContributorPage />} />
+              <Route path="/contributor" element={<ContributorPage />} /> {/* For testing */}
               
               {/* Recipient routes */}
               <Route path="/keepsake/:accessToken" element={<KeepsakeBookPage />} />
