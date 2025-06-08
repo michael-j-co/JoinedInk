@@ -664,26 +664,28 @@ router.delete('/:eventId', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Event not found or you do not have access to this event' });
     }
 
-    // Delete all related data in the correct order (due to foreign key constraints)
-    // 1. Delete contributions
-    await prisma.contribution.deleteMany({
-      where: { eventId }
-    });
+    // Delete all related data in a single transaction to ensure atomicity
+    await prisma.$transaction([
+      // 1. Delete contributions
+      prisma.contribution.deleteMany({
+        where: { eventId }
+      }),
 
-    // 2. Delete contributor sessions
-    await prisma.contributorSession.deleteMany({
-      where: { eventId }
-    });
+      // 2. Delete contributor sessions
+      prisma.contributorSession.deleteMany({
+        where: { eventId }
+      }),
 
-    // 3. Delete recipients
-    await prisma.recipient.deleteMany({
-      where: { eventId }
-    });
+      // 3. Delete recipients
+      prisma.recipient.deleteMany({
+        where: { eventId }
+      }),
 
-    // 4. Delete the event itself
-    await prisma.event.delete({
-      where: { id: eventId }
-    });
+      // 4. Delete the event itself
+      prisma.event.delete({
+        where: { id: eventId }
+      })
+    ]);
 
     res.json({ message: 'Event deleted successfully' });
   } catch (error) {
@@ -729,13 +731,11 @@ router.post('/:eventId/send-keepsake-books', authenticateToken, async (req, res)
       return res.status(400).json({ error: 'Cannot send keepsake books - no contributions have been submitted yet' });
     }
 
-    // Send keepsake book notifications to recipients first
+    // Send keepsake book notifications to recipients concurrently
     // Only close the event if ALL emails are sent successfully
-    let emailsSent = 0;
-    const emailResults = [];
-    const emailErrors = [];
-
-    for (const recipient of event.recipients) {
+    
+    // Create concurrent email sending promises for all recipients
+    const emailPromises = event.recipients.map(async (recipient) => {
       if (recipient.contributions.length > 0) {
         try {
           // Send keepsake book notification email using appropriate template
@@ -754,43 +754,89 @@ router.post('/:eventId/send-keepsake-books', authenticateToken, async (req, res)
                 recipient.accessToken
               );
           
-          if (emailResult.success) {
+          return {
+            recipient,
+            result: emailResult,
+            type: 'email'
+          };
+        } catch (error) {
+          console.error(`Failed to send email to ${recipient.email}:`, error);
+          return {
+            recipient,
+            error: error.message,
+            type: 'email'
+          };
+        }
+      } else {
+        // Skip recipients with no contributions
+        return {
+          recipient,
+          type: 'skip'
+        };
+      }
+    });
+
+    // Wait for all email operations to complete concurrently
+    const emailPromiseResults = await Promise.allSettled(emailPromises);
+    
+    // Process results and populate emailResults and emailErrors arrays
+    let emailsSent = 0;
+    const emailResults = [];
+    const emailErrors = [];
+
+    emailPromiseResults.forEach((promiseResult, index) => {
+      if (promiseResult.status === 'fulfilled') {
+        const { recipient, result, error, type } = promiseResult.value;
+        
+        if (type === 'skip') {
+          // Skip recipients with no contributions
+          emailResults.push({
+            recipient: recipient.name,
+            email: recipient.email,
+            contributionsCount: 0,
+            status: 'skipped',
+            reason: 'No contributions received'
+          });
+        } else if (type === 'email') {
+          if (error) {
+            // Email sending threw an exception
+            emailErrors.push({
+              recipient: recipient.name,
+              email: recipient.email,
+              error,
+              status: 'failed'
+            });
+          } else if (result.success) {
+            // Email sent successfully
             emailResults.push({
               recipient: recipient.name,
               email: recipient.email,
               contributionsCount: recipient.contributions.length,
               status: 'sent',
-              messageId: emailResult.messageId
+              messageId: result.messageId
             });
             emailsSent++;
           } else {
+            // Email service returned failure
             emailErrors.push({
               recipient: recipient.name,
               email: recipient.email,
-              error: emailResult.error,
+              error: result.error,
               status: 'failed'
             });
           }
-        } catch (error) {
-          console.error(`Failed to send email to ${recipient.email}:`, error);
-          emailErrors.push({
-            recipient: recipient.name,
-            email: recipient.email,
-            error: error.message,
-            status: 'failed'
-          });
         }
       } else {
-        // Skip recipients with no contributions
-        emailResults.push({
+        // Promise itself was rejected (unexpected error)
+        const recipient = event.recipients[index];
+        emailErrors.push({
           recipient: recipient.name,
           email: recipient.email,
-          contributionsCount: 0,
-          status: 'skipped',
-          reason: 'No contributions received'
+          error: promiseResult.reason?.message || 'Unexpected error',
+          status: 'failed'
         });
       }
-    }
+    });
 
     // Only close the event if all emails were sent successfully
     let eventClosed = false;
