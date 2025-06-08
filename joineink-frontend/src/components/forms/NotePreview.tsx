@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { NoteContent, BackgroundTheme } from '../../types';
 import { DraggableMedia } from './DraggableMedia';
+import { createSafeHtml } from '../../utils/sanitizeHtml';
 
 interface NotePreviewProps {
   content: NoteContent;
@@ -66,7 +67,7 @@ export const NotePreview: React.FC<NotePreviewProps> = ({
             >
               <div 
                 className="text-gray-800 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: content.text }}
+                dangerouslySetInnerHTML={createSafeHtml(content.text)}
               />
             </div>
           )}

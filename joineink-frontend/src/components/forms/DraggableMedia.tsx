@@ -18,13 +18,18 @@ export const DraggableMedia: React.FC<DraggableMediaProps> = ({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState(item.position || { x: 0, y: 0 });
   const itemRef = useRef<HTMLDivElement>(null);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const positionRef = useRef(item.position || { x: 0, y: 0 });
 
   // Update position when item.position changes
   useEffect(() => {
     if (item.position) {
       setPosition(item.position);
+      positionRef.current = item.position;
     }
   }, [item.position]);
+
+  // Note: dragOffsetRef and positionRef are kept in sync directly in event handlers for performance
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!itemRef.current || !containerRef.current) return;
@@ -32,11 +37,14 @@ export const DraggableMedia: React.FC<DraggableMediaProps> = ({
     const itemRect = itemRef.current.getBoundingClientRect();
     const containerRect = containerRef.current.getBoundingClientRect();
 
-    setIsDragging(true);
-    setDragOffset({
+    const newDragOffset = {
       x: e.clientX - itemRect.left,
       y: e.clientY - itemRect.top
-    });
+    };
+    
+    setIsDragging(true);
+    setDragOffset(newDragOffset);
+    dragOffsetRef.current = newDragOffset;
 
     e.preventDefault();
   };
@@ -47,11 +55,14 @@ export const DraggableMedia: React.FC<DraggableMediaProps> = ({
     const touch = e.touches[0];
     const itemRect = itemRef.current.getBoundingClientRect();
 
-    setIsDragging(true);
-    setDragOffset({
+    const newDragOffset = {
       x: touch.clientX - itemRect.left,
       y: touch.clientY - itemRect.top
-    });
+    };
+    
+    setIsDragging(true);
+    setDragOffset(newDragOffset);
+    dragOffsetRef.current = newDragOffset;
 
     e.preventDefault();
   };
@@ -63,15 +74,17 @@ export const DraggableMedia: React.FC<DraggableMediaProps> = ({
     const itemWidth = itemRef.current?.offsetWidth || 0;
     const itemHeight = itemRef.current?.offsetHeight || 0;
 
-    let newX = e.clientX - containerRect.left - dragOffset.x;
-    let newY = e.clientY - containerRect.top - dragOffset.y;
+    let newX = e.clientX - containerRect.left - dragOffsetRef.current.x;
+    let newY = e.clientY - containerRect.top - dragOffsetRef.current.y;
 
     // Add padding to keep items within a reasonable content area
     const padding = 10;
     newX = Math.max(padding, Math.min(newX, containerRect.width - itemWidth - padding));
     newY = Math.max(padding, Math.min(newY, containerRect.height - itemHeight - padding));
 
-    setPosition({ x: newX, y: newY });
+    const newPosition = { x: newX, y: newY };
+    setPosition(newPosition);
+    positionRef.current = newPosition;
   };
 
   const handleTouchMove = (e: TouchEvent) => {
@@ -82,28 +95,30 @@ export const DraggableMedia: React.FC<DraggableMediaProps> = ({
     const itemWidth = itemRef.current?.offsetWidth || 0;
     const itemHeight = itemRef.current?.offsetHeight || 0;
 
-    let newX = touch.clientX - containerRect.left - dragOffset.x;
-    let newY = touch.clientY - containerRect.top - dragOffset.y;
+    let newX = touch.clientX - containerRect.left - dragOffsetRef.current.x;
+    let newY = touch.clientY - containerRect.top - dragOffsetRef.current.y;
 
     // Add padding to keep items within a reasonable content area
     const padding = 10;
     newX = Math.max(padding, Math.min(newX, containerRect.width - itemWidth - padding));
     newY = Math.max(padding, Math.min(newY, containerRect.height - itemHeight - padding));
 
-    setPosition({ x: newX, y: newY });
+    const newPosition = { x: newX, y: newY };
+    setPosition(newPosition);
+    positionRef.current = newPosition;
   };
 
   const handleMouseUp = () => {
     if (isDragging) {
       setIsDragging(false);
-      onPositionChange(item.id, position);
+      onPositionChange(item.id, positionRef.current);
     }
   };
 
   const handleTouchEnd = () => {
     if (isDragging) {
       setIsDragging(false);
-      onPositionChange(item.id, position);
+      onPositionChange(item.id, positionRef.current);
     }
   };
 
@@ -122,7 +137,7 @@ export const DraggableMedia: React.FC<DraggableMediaProps> = ({
         document.removeEventListener('touchend', handleTouchEnd);
       };
     }
-  }, [isDragging, dragOffset, position]);
+  }, [isDragging]);
 
   const isDrawing = 'dataUrl' in item;
   const imageUrl = isDrawing ? item.dataUrl : item.url;

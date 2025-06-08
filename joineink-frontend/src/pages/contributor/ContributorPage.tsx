@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NoteEditor } from '../../components/forms/NoteEditor';
 import { NoteContent, BackgroundTheme } from '../../types';
+import { createSafeHtml } from '../../utils/sanitizeHtml';
 
 export const ContributorPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,7 +55,10 @@ export const ContributorPage: React.FC = () => {
   };
 
   if (showPreview && currentContent) {
-  return (
+    // Cache the theme lookup to avoid multiple find calls
+    const selectedTheme = BACKGROUND_THEMES.find(t => t.id === currentContent.backgroundColor) || BACKGROUND_THEMES[0];
+    
+    return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-4xl mx-auto p-6">
           <div className="mb-6 flex items-center justify-between">
@@ -71,15 +75,9 @@ export const ContributorPage: React.FC = () => {
             <div className="max-w-2xl mx-auto">
               {/* Full preview with background theme */}
               <div
-                className={`p-8 ${
-                  BACKGROUND_THEMES.find(t => t.id === currentContent.backgroundColor)?.gradient ||
-                  BACKGROUND_THEMES.find(t => t.id === currentContent.backgroundColor)?.cssClass ||
-                  'bg-white'
-                }`}
+                className={`p-8 ${selectedTheme.gradient || selectedTheme.cssClass || 'bg-white'}`}
                 style={{
-                  background: BACKGROUND_THEMES.find(t => t.id === currentContent.backgroundColor)?.gradient
-                    ? undefined
-                    : BACKGROUND_THEMES.find(t => t.id === currentContent.backgroundColor)?.preview
+                  background: selectedTheme.gradient ? undefined : selectedTheme.preview
                 }}
               >
                 {/* Header */}
@@ -100,7 +98,7 @@ export const ContributorPage: React.FC = () => {
                         fontFamily: currentContent.formatting.fontFamily,
                       }}
                       className="text-gray-800 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: currentContent.text }}
+                      dangerouslySetInnerHTML={createSafeHtml(currentContent.text)}
                     />
                   </div>
                 )}

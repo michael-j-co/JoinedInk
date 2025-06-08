@@ -83,7 +83,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [typedSignature, setTypedSignature] = useState('');
   const [signatureFont, setSignatureFont] = useState('Dancing Script, cursive');
   const [previewWidth, setPreviewWidth] = useState(50); // Percentage width for preview
-  const [isLargeScreen, setIsLargeScreen] = useState(typeof window !== 'undefined' && window.innerWidth >= 1024);
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
 
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
   const richTextEditorRef = useRef<HTMLDivElement>(null);
@@ -447,6 +447,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+  }, []);
+
+  // Initialize screen size after component mounts (prevents SSR hydration mismatch)
+  useEffect(() => {
+    setIsLargeScreen(window.innerWidth >= 1024);
   }, []);
 
   // Handle window resize for responsive layout
