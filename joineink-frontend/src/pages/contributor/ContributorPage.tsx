@@ -1,18 +1,96 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { NoteEditor } from '../../components/forms/NoteEditor';
 import { NoteContent, BackgroundTheme } from '../../types';
 import { createSafeHtml } from '../../utils/sanitizeHtml';
+import axios from 'axios';
+
+interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  eventType: 'INDIVIDUAL_TRIBUTE' | 'CIRCLE_NOTES';
+  deadline: string;
+}
+
+interface Recipient {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface SessionInfo {
+  event: Event;
+  recipients: Recipient[];
+  completedRecipients: string[];
+  currentUser?: {
+    id: string;
+    email: string;
+  };
+}
 
 export const ContributorPage: React.FC = () => {
+  const { token } = useParams<{ token: string }>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [currentContent, setCurrentContent] = useState<NoteContent | null>(null);
+  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
+  const [selectedRecipient, setSelectedRecipient] = useState<Recipient | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  
+  // Store drafts for each recipient
+  const [recipientDrafts, setRecipientDrafts] = useState<Record<string, NoteContent>>({});
 
-  // Mock data - in production, this would come from URL params or API
-  const mockEvent = {
-    recipientName: "Sarah Johnson",
-    eventTitle: "Sarah's Retirement Celebration",
-    deadline: "2024-02-15"
+  useEffect(() => {
+    if (token) {
+      fetchSessionInfo();
+    }
+  }, [token]);
+
+  const fetchSessionInfo = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`/api/contributions/session/${token}`);
+      setSessionInfo(response.data);
+      
+      // For Individual Tribute, select the first (and only) recipient
+      // For Circle Notes, let user choose
+      if (response.data.recipients.length > 0) {
+        if (response.data.event.eventType === 'INDIVIDUAL_TRIBUTE') {
+          setSelectedRecipient(response.data.recipients[0]);
+        }
+        // For Circle Notes, we'll let them choose from the recipient selector
+      }
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        setError('Invalid contribution link. Please check the URL and try again.');
+      } else if (err.response?.status === 410) {
+        setError(err.response.data.error || 'This contribution link has expired.');
+      } else {
+        setError('Failed to load event information. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRecipientChange = (recipient: Recipient) => {
+    // Save current content as draft for previous recipient
+    if (selectedRecipient && currentContent) {
+      setRecipientDrafts(prev => ({
+        ...prev,
+        [selectedRecipient.id]: currentContent
+      }));
+    }
+
+    // Switch to new recipient
+    setSelectedRecipient(recipient);
+    
+    // Load draft for new recipient or start fresh
+    const existingDraft = recipientDrafts[recipient.id];
+    setCurrentContent(existingDraft || null);
+    setShowPreview(false);
   };
 
   // Background themes (same as in NoteEditor)
@@ -26,20 +104,51 @@ export const ContributorPage: React.FC = () => {
   ];
 
   const handleSave = async (content: NoteContent) => {
+    if (!selectedRecipient || !sessionInfo || !token) return;
+    
     setIsSubmitting(true);
     try {
-      // In production, this would be an API call to save the contribution
-      console.log('Saving contribution:', content);
+      const formData = new FormData();
+      formData.append('contributorToken', token);
+      formData.append('recipientId', selectedRecipient.id);
+      formData.append('content', content.text || '');
+      formData.append('contributorName', content.contributorName || '');
+      formData.append('fontFamily', content.formatting?.fontFamily || '');
+      formData.append('backgroundColor', content.backgroundColor || '');
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (content.signature?.data) {
+        formData.append('signature', content.signature.data);
+      }
       
-      // Show success message or redirect
-      alert('Your message has been submitted successfully!');
+      if (content.drawings && content.drawings.length > 0) {
+        formData.append('drawings', JSON.stringify(content.drawings));
+      }
       
-    } catch (error) {
+      // TODO: Handle images and stickers uploads
+      
+      await axios.post('/api/contributions/submit', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      // Mark this recipient as completed
+      setRecipientDrafts(prev => {
+        const newDrafts = { ...prev };
+        delete newDrafts[selectedRecipient.id];
+        return newDrafts;
+      });
+      
+      alert(`Your message for ${selectedRecipient.name} has been submitted successfully!`);
+      
+      // For Circle Notes, allow them to continue with other recipients
+      if (sessionInfo.event.eventType === 'CIRCLE_NOTES') {
+        setCurrentContent(null);
+        // Don't auto-select next recipient, let them choose
+        setSelectedRecipient(null);
+      }
+      
+    } catch (error: any) {
       console.error('Error saving contribution:', error);
-      alert('There was an error submitting your message. Please try again.');
+      alert(error.response?.data?.error || 'There was an error submitting your message. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -52,7 +161,64 @@ export const ContributorPage: React.FC = () => {
 
   const handleContentChange = (content: NoteContent) => {
     setCurrentContent(content);
+    
+    // Auto-save draft for current recipient
+    if (selectedRecipient) {
+      setRecipientDrafts(prev => ({
+        ...prev,
+        [selectedRecipient.id]: content
+      }));
+    }
   };
+
+  const formatDeadline = (deadline: string) => {
+    return new Date(deadline).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-300 rounded w-64 mb-4"></div>
+          <div className="h-4 bg-gray-300 rounded w-48 mb-2"></div>
+          <div className="h-4 bg-gray-300 rounded w-32"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-lg p-8 border border-red-200 max-w-lg w-full text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Unable to Load Event</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={() => window.location.href = '/'}
+            className="px-6 py-3 bg-rose-500 text-white rounded-lg hover:bg-rose-600 transition-colors"
+          >
+            Go to Homepage
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!sessionInfo) {
+    return null;
+  }
 
   if (showPreview && currentContent) {
     // Cache the theme lookup to avoid multiple find calls
@@ -83,7 +249,7 @@ export const ContributorPage: React.FC = () => {
                 {/* Header */}
                 <div className="text-center mb-8 pb-4 border-b border-gray-200">
                   <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    For {currentContent.recipientName}
+                    For {selectedRecipient?.name || 'Unknown'}
                   </h2>
                   {currentContent.contributorName && (
                     <p className="text-gray-600">From {currentContent.contributorName}</p>
@@ -95,7 +261,7 @@ export const ContributorPage: React.FC = () => {
                   <div className="prose prose-lg max-w-none mb-6">
                     <div 
                       style={{
-                        fontFamily: currentContent.formatting.fontFamily,
+                        fontFamily: currentContent.formatting?.fontFamily,
                       }}
                       className="text-gray-800 leading-relaxed"
                       dangerouslySetInnerHTML={createSafeHtml(currentContent.text)}
@@ -104,7 +270,7 @@ export const ContributorPage: React.FC = () => {
                 )}
 
                 {/* Media content */}
-                {currentContent.media.length > 0 && (
+                {currentContent.media && currentContent.media.length > 0 && (
                   <div className="relative min-h-[200px] mb-6">
                     {currentContent.media.map((item) => (
                       item.position ? (
@@ -143,7 +309,7 @@ export const ContributorPage: React.FC = () => {
                 )}
 
                 {/* Drawings */}
-                {currentContent.drawings.length > 0 && (
+                {currentContent.drawings && currentContent.drawings.length > 0 && (
                   <div className="relative min-h-[200px] mb-6">
                     {currentContent.drawings.map((drawing) => (
                       drawing.position ? (
@@ -190,7 +356,7 @@ export const ContributorPage: React.FC = () => {
                       ) : (
                         <div
                           style={{
-                            fontFamily: currentContent.signature.font || 'Dancing Script, cursive',
+                            fontFamily: currentContent.signature?.font || 'Dancing Script, cursive',
                             fontSize: '24px'
                           }}
                           className="text-gray-700"
@@ -226,11 +392,114 @@ export const ContributorPage: React.FC = () => {
     );
   }
 
+  // For Circle Notes, show recipient selector if no recipient is selected
+  if (sessionInfo.event.eventType === 'CIRCLE_NOTES' && !selectedRecipient) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-4xl mx-auto p-6">
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-rose-500 to-pink-500 text-white p-6">
+              <h1 className="text-3xl font-bold mb-2">{sessionInfo.event.title}</h1>
+              <p className="text-rose-100">Choose who you'd like to write a message for</p>
+              <div className="mt-4 text-sm text-rose-100">
+                <span>Deadline: {formatDeadline(sessionInfo.event.deadline)}</span>
+              </div>
+            </div>
+
+            {/* Event Description */}
+            {sessionInfo.event.description && (
+              <div className="p-6 bg-rose-50 border-b border-rose-200">
+                <p className="text-gray-700">{sessionInfo.event.description}</p>
+              </div>
+            )}
+
+            {/* Recipient Selection */}
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Circle Participants</h2>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {sessionInfo.recipients.map((recipient) => {
+                  const hasDraft = recipientDrafts[recipient.id];
+                  const isCompleted = sessionInfo.completedRecipients.includes(recipient.id);
+                  
+                  return (
+                    <button
+                      key={recipient.id}
+                      onClick={() => handleRecipientChange(recipient)}
+                      disabled={isCompleted}
+                      className={`p-4 rounded-lg border-2 transition-all text-left ${
+                        isCompleted
+                          ? 'border-green-200 bg-green-50 cursor-not-allowed'
+                          : 'border-gray-200 hover:border-rose-300 hover:bg-rose-50 cursor-pointer'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold text-gray-900">{recipient.name}</h3>
+                        <div className="flex gap-2">
+                          {hasDraft && !isCompleted && (
+                            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded">
+                              Draft
+                            </span>
+                          )}
+                          {isCompleted && (
+                            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
+                              ✓ Sent
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600">{recipient.email}</p>
+                      <div className="mt-3 text-sm">
+                        {isCompleted ? (
+                          <span className="text-green-600">Message submitted</span>
+                        ) : hasDraft ? (
+                          <span className="text-yellow-600">Continue writing →</span>
+                        ) : (
+                          <span className="text-rose-600">Write message →</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Recipient Selector Bar for Circle Notes */}
+      {sessionInfo.event.eventType === 'CIRCLE_NOTES' && selectedRecipient && (
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+          <div className="max-w-4xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setSelectedRecipient(null)}
+                  className="text-gray-600 hover:text-gray-800 text-sm font-medium"
+                >
+                  ← Back to participants
+                </button>
+                <div className="h-4 w-px bg-gray-300"></div>
+                <div>
+                  <span className="text-sm text-gray-600">Writing for:</span>
+                  <span className="ml-2 font-semibold text-gray-900">{selectedRecipient.name}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span>{sessionInfo.completedRecipients.length} of {sessionInfo.recipients.length} completed</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <NoteEditor
-        recipientName={mockEvent.recipientName}
-        eventTitle={mockEvent.eventTitle}
+        recipientName={selectedRecipient?.name || 'Unknown'}
+        eventTitle={sessionInfo.event.title}
         initialContent={currentContent ? currentContent : undefined}
         onSave={handleSave}
         onPreview={handlePreview}

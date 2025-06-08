@@ -32,7 +32,7 @@ export const NotePreview: React.FC<NotePreviewProps> = ({
   return (
     <div className="w-full h-full p-4">
       <div
-        className={`w-full min-h-full p-6 rounded-lg shadow-sm ${
+        className={`w-full min-h-full p-8 rounded-lg shadow-sm ${
           theme.gradient || theme.cssClass || 'bg-white'
         }`}
         style={{
@@ -41,7 +41,7 @@ export const NotePreview: React.FC<NotePreviewProps> = ({
         }}
       >
         {/* Header with recipient name */}
-        <div className="mb-6 pb-4 border-b border-gray-200">
+        <div className="mb-8 pb-4 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">
             For {content.recipientName}
           </h3>
@@ -53,13 +53,13 @@ export const NotePreview: React.FC<NotePreviewProps> = ({
         </div>
 
         {/* Main message content */}
-        <div ref={contentRef} className="space-y-6 relative min-h-[300px]">
+        <div ref={contentRef} className="space-y-6 relative min-h-[450px]">
           {/* Drag bounds area - invisible container for better positioning */}
           <div ref={bodyAreaRef} className="absolute inset-0 pointer-events-none" />
           {/* Text content */}
           {content.text && (
             <div
-              className="prose prose-sm max-w-none"
+              className="prose prose-sm max-w-none mb-6"
               style={{
                 fontFamily: content.formatting.fontFamily,
                 fontSize: content.formatting.fontSize
@@ -210,7 +210,7 @@ export const NotePreview: React.FC<NotePreviewProps> = ({
 
         {/* Empty state */}
         {!content.text && content.media.length === 0 && content.drawings.length === 0 && (
-          <div className="text-center py-12 text-gray-400">
+          <div className="text-center py-20 text-gray-400">
             <p className="text-lg">Your message preview will appear here</p>
             <p className="text-sm mt-2">Start writing to see how it will look</p>
           </div>

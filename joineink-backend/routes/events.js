@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcrypt');
 const { authenticateToken } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
 
@@ -288,17 +289,128 @@ router.get('/:eventId/contributor-links', authenticateToken, async (req, res) =>
         contributorLinks.contributorUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/contribute/${contributorSessions[0].token}`;
       }
     } else if (event.eventType === 'CIRCLE_NOTES') {
-      // Map contributor tokens to recipient emails
-      event.recipients.forEach((recipient, index) => {
-        if (contributorSessions[index]) {
-          contributorLinks[recipient.email] = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/contribute/${contributorSessions[index].token}`;
-        }
-      });
+      // For Circle Notes, return the join link
+      if (contributorSessions.length > 0) {
+        contributorLinks.joinLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/join-circle/${contributorSessions[0].token}`;
+      }
     }
 
     res.json({ contributorLinks });
   } catch (error) {
     console.error('Get contributor links error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Join a circle notes event
+router.post('/:eventId/join-circle', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { name, email, joinToken, password } = req.body;
+
+    if (!name || !email || !joinToken || !password) {
+      return res.status(400).json({ error: 'Name, email, password, and join token are required' });
+    }
+
+    // Verify the join token belongs to this event and is valid
+    const session = await prisma.contributorSession.findUnique({
+      where: { token: joinToken },
+      include: {
+        event: true
+      }
+    });
+
+    if (!session || session.eventId !== eventId) {
+      return res.status(400).json({ error: 'Invalid join token for this event' });
+    }
+
+    if (new Date() > session.expiresAt) {
+      return res.status(410).json({ error: 'Join link has expired' });
+    }
+
+    if (session.event.eventType !== 'CIRCLE_NOTES') {
+      return res.status(400).json({ error: 'This endpoint is only for Circle Notes events' });
+    }
+
+    if (session.event.status === 'CLOSED') {
+      return res.status(410).json({ error: 'This event has been closed' });
+    }
+
+    // Check if this email is already registered for this event
+    const existingRecipient = await prisma.recipient.findFirst({
+      where: {
+        eventId,
+        email
+      }
+    });
+
+    if (existingRecipient) {
+      return res.status(400).json({ error: 'This email is already registered for this event' });
+    }
+
+    // Check if user already exists, if not create account
+    let user = await prisma.user.findUnique({
+      where: { email: email.trim() }
+    });
+
+    if (user) {
+      // User exists - verify password to prevent impersonation
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return res.status(409).json({ 
+          error: 'An account with this email already exists. Please use the correct password or try a different email.' 
+        });
+      }
+      // Password is valid - user can proceed with existing account
+    } else {
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      // Create new user account
+      user = await prisma.user.create({
+        data: {
+          name: name.trim(),
+          email: email.trim(),
+          password: hashedPassword
+        }
+      });
+    }
+
+    // Create recipient for the new participant
+    const recipient = await prisma.recipient.create({
+      data: {
+        name: name.trim(),
+        email: email.trim(),
+        accessToken: uuidv4(),
+        userId: user.id, // Link to user account
+        eventId
+      }
+    });
+
+    // Create a new contributor session for this person, linked to their user account
+    const contributorToken = uuidv4();
+    await prisma.contributorSession.create({
+      data: {
+        token: contributorToken,
+        eventId,
+        userId: user.id, // Link to user account
+        expiresAt: session.expiresAt,
+        completedRecipients: [] // Will track which people this person has written for
+      }
+    });
+
+    res.status(201).json({
+      message: 'Successfully joined circle notes event',
+      contributorToken,
+      participant: {
+        id: recipient.id,
+        name: recipient.name,
+        email: recipient.email,
+        userId: user.id
+      }
+    });
+  } catch (error) {
+    console.error('Join circle error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

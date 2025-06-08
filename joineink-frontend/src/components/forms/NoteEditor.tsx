@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import SignatureCanvas from 'react-signature-canvas';
+import DOMPurify from 'dompurify';
 import { 
   PhotoIcon, 
   GifIcon, 
@@ -95,16 +96,30 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   useEffect(() => {
     if (richTextEditorRef.current && initialContent?.text && richTextEditorRef.current.innerHTML !== initialContent.text && !isTypingRef.current) {
       // Only update if the content is actually different and user is not currently typing
-      richTextEditorRef.current.innerHTML = initialContent.text;
+      // Sanitize content to prevent XSS attacks
+      const sanitizedContent = DOMPurify.sanitize(initialContent.text);
+      richTextEditorRef.current.innerHTML = sanitizedContent;
     }
   }, [initialContent]);
+
+  // Sync rich text editor with current content state (for tab switching)
+  useEffect(() => {
+    if (richTextEditorRef.current && content.text !== undefined && richTextEditorRef.current.innerHTML !== content.text && !isTypingRef.current) {
+      // Update editor content when internal state changes (e.g., when switching back to write tab)
+      // Sanitize content to prevent XSS attacks
+      const sanitizedContent = DOMPurify.sanitize(content.text);
+      richTextEditorRef.current.innerHTML = sanitizedContent;
+    }
+  }, [content.text, activeTab]); // Include activeTab to trigger sync when switching back to write tab
 
   // Calculate word and character counts from HTML content (debounced to avoid interfering with typing)
   useEffect(() => {
     const timer = setTimeout(() => {
       // Strip HTML tags to get plain text for counting
       const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = content.text || '';
+      // Sanitize content before using innerHTML
+      const sanitizedContent = DOMPurify.sanitize(content.text || '');
+      tempDiv.innerHTML = sanitizedContent;
       const textContent = tempDiv.textContent || tempDiv.innerText || '';
       
       const words = textContent.trim().split(/\s+/).filter(word => word.length > 0);
@@ -763,7 +778,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                       <select
                         value={signatureFont}
                         onChange={(e) => setSignatureFont(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary custom-select"
                       >
                         <option value="Dancing Script, cursive">Dancing Script</option>
                         <option value="Pacifico, cursive">Pacifico</option>
@@ -776,7 +791,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                       value={typedSignature}
                       onChange={(e) => setTypedSignature(e.target.value)}
                       placeholder="Type your signature"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary custom-input"
                       style={{ fontFamily: signatureFont, fontSize: '24px' }}
                     />
                     <button
