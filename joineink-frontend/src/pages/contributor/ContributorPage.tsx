@@ -106,6 +106,13 @@ export const ContributorPage: React.FC = () => {
   const handleSave = async (content: NoteContent) => {
     if (!selectedRecipient || !sessionInfo || !token) return;
     
+    // Validate content before submitting
+    if (!content.text?.trim() && (!content.media || content.media.length === 0) && 
+        (!content.drawings || content.drawings.length === 0) && !content.signature) {
+      alert('Please add some content to your message before submitting.');
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
       const formData = new FormData();
@@ -116,15 +123,55 @@ export const ContributorPage: React.FC = () => {
       formData.append('fontFamily', content.formatting?.fontFamily || '');
       formData.append('backgroundColor', content.backgroundColor || '');
       
+      // Handle signature
       if (content.signature?.data) {
-        formData.append('signature', content.signature.data);
+        formData.append('signature', JSON.stringify(content.signature));
       }
       
+      // Handle drawings
       if (content.drawings && content.drawings.length > 0) {
         formData.append('drawings', JSON.stringify(content.drawings));
       }
       
-      // TODO: Handle images and stickers uploads
+      // Handle media items (images, GIFs, stickers)
+      if (content.media && content.media.length > 0) {
+        // Convert media items to a format suitable for backend
+        const mediaData = content.media.map(item => ({
+          id: item.id,
+          type: item.type,
+          url: item.url,
+          alt: item.alt,
+          width: item.width,
+          height: item.height,
+          position: item.position
+        }));
+        formData.append('media', JSON.stringify(mediaData));
+      }
+      
+      // Handle uploaded image files (if any are local blobs)
+      if (content.media) {
+        let imageIndex = 0;
+        for (const mediaItem of content.media) {
+          if (mediaItem.type === 'image' && mediaItem.url.startsWith('blob:')) {
+            try {
+              const response = await fetch(mediaItem.url);
+              const blob = await response.blob();
+              formData.append(`images`, blob, `image-${mediaItem.id}.png`);
+              imageIndex++;
+            } catch (error) {
+              console.warn('Failed to process image blob:', error);
+            }
+          }
+        }
+      }
+      
+      // Add additional formatting data
+      formData.append('formatting', JSON.stringify({
+        fontFamily: content.formatting?.fontFamily,
+        fontSize: content.formatting?.fontSize,
+        bold: content.formatting?.bold,
+        italic: content.formatting?.italic
+      }));
       
       await axios.post('/api/contributions/submit', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -137,6 +184,14 @@ export const ContributorPage: React.FC = () => {
         return newDrafts;
       });
       
+      // Update session info to reflect the completion
+      if (sessionInfo) {
+        setSessionInfo(prev => prev ? {
+          ...prev,
+          completedRecipients: [...prev.completedRecipients, selectedRecipient.id]
+        } : null);
+      }
+      
       alert(`Your message for ${selectedRecipient.name} has been submitted successfully!`);
       
       // For Circle Notes, allow them to continue with other recipients
@@ -148,7 +203,21 @@ export const ContributorPage: React.FC = () => {
       
     } catch (error: any) {
       console.error('Error saving contribution:', error);
-      alert(error.response?.data?.error || 'There was an error submitting your message. Please try again.');
+      
+      // Provide specific error messages based on the error type
+      let errorMessage = 'There was an error submitting your message. Please try again.';
+      
+      if (error.response?.status === 400 && error.response.data?.error?.includes('already submitted')) {
+        errorMessage = 'You have already submitted a message for this person.';
+      } else if (error.response?.status === 410) {
+        errorMessage = error.response.data?.error || 'This event has expired or been closed.';
+      } else if (error.response?.status === 413) {
+        errorMessage = 'Your message is too large. Please reduce the number or size of images and try again.';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

@@ -11,7 +11,8 @@ const prisma = new PrismaClient();
 // Get all events for authenticated user
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const events = await prisma.event.findMany({
+    // Get events created by the user
+    const createdEvents = await prisma.event.findMany({
       where: { organizerId: req.user.userId },
       include: {
         recipients: {
@@ -31,7 +32,55 @@ router.get('/', authenticateToken, async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json({ events });
+    // Get Circle Notes events where user is a participant
+    const participatingEvents = await prisma.event.findMany({
+      where: {
+        AND: [
+          { eventType: 'CIRCLE_NOTES' },
+          { organizerId: { not: req.user.userId } }, // Not the organizer
+          {
+            contributorSessions: {
+              some: {
+                userId: req.user.userId
+              }
+            }
+          }
+        ]
+      },
+      include: {
+        recipients: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            _count: {
+              select: { contributions: true }
+            }
+          }
+        },
+        _count: {
+          select: { contributions: true }
+        },
+        organizer: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Add role metadata to each event
+    const eventsWithRoles = [
+      ...createdEvents.map(event => ({ ...event, userRole: 'organizer' })),
+      ...participatingEvents.map(event => ({ ...event, userRole: 'participant' }))
+    ];
+
+    // Sort all events by creation date
+    eventsWithRoles.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json({ events: eventsWithRoles });
   } catch (error) {
     console.error('Get events error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -43,7 +92,8 @@ router.get('/:eventId', authenticateToken, async (req, res) => {
   try {
     const { eventId } = req.params;
 
-    const event = await prisma.event.findFirst({
+    // First, try to find if user is the organizer
+    let event = await prisma.event.findFirst({
       where: {
         id: eventId,
         organizerId: req.user.userId
@@ -61,15 +111,82 @@ router.get('/:eventId', authenticateToken, async (req, res) => {
         },
         _count: {
           select: { contributions: true }
+        },
+        organizer: {
+          select: {
+            name: true,
+            email: true
+          }
         }
       }
     });
 
+    let userRole = 'organizer';
+
+    // If not found as organizer, check if user is a participant
     if (!event) {
-      return res.status(404).json({ error: 'Event not found' });
+      event = await prisma.event.findFirst({
+        where: {
+          id: eventId,
+          contributorSessions: {
+            some: {
+              userId: req.user.userId
+            }
+          }
+        },
+        include: {
+          recipients: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              _count: {
+                select: { contributions: true }
+              }
+            }
+          },
+          _count: {
+            select: { contributions: true }
+          },
+          organizer: {
+            select: {
+              name: true,
+              email: true
+            }
+          }
+        }
+      });
+      userRole = 'participant';
     }
 
-    res.json({ event });
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found or you do not have access to this event' });
+    }
+
+    // Add user's role and participation status
+    const responseData = {
+      ...event,
+      userRole
+    };
+
+    // If user is a participant, get their contributor session info
+    if (userRole === 'participant') {
+      const contributorSession = await prisma.contributorSession.findFirst({
+        where: {
+          eventId,
+          userId: req.user.userId
+        }
+      });
+      
+      if (contributorSession) {
+        responseData.participantInfo = {
+          contributorToken: contributorSession.token,
+          completedRecipients: contributorSession.completedRecipients || []
+        };
+      }
+    }
+
+    res.json({ event: responseData });
   } catch (error) {
     console.error('Get event error:', error);
     res.status(500).json({ error: 'Internal server error' });

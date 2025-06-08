@@ -93,10 +93,14 @@ model Contribution {
   // Styling and media
   fontFamily   String?
   backgroundColor String?
-  signature    String? // Base64 encoded signature image
-  images       String[] // Array of image URLs
-  stickers     String[] // Array of sticker identifiers
-  drawings     String? // Base64 encoded drawing
+  signature    Json? // JSON object for signature data (type, data, font)
+  images       String[] // Array of image URLs (legacy)
+  stickers     String[] // Array of sticker identifiers (legacy)
+  drawings     Json? // JSON object for drawings data
+  
+  // New comprehensive fields
+  media        Json? // JSON array of media items (images, gifs, stickers)
+  formatting   Json? // JSON object for text formatting (fontFamily, fontSize, bold, italic)
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

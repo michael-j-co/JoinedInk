@@ -19,6 +19,7 @@ export const CreateEventPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [createdEvent, setCreatedEvent] = useState<any>(null);
+  const [copiedStates, setCopiedStates] = useState<{[key: string]: boolean}>({});
   const [formData, setFormData] = useState<EventFormData>({
     eventType: '',
     title: '',
@@ -98,6 +99,7 @@ export const CreateEventPage: React.FC = () => {
 
       const response = await axios.post('/api/events', eventData);
       setCreatedEvent(response.data);
+      setCopiedStates({}); // Reset copied states for the success step
       setCurrentStep(4);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create event');
@@ -106,9 +108,14 @@ export const CreateEventPage: React.FC = () => {
     }
   };
 
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = (text: string, buttonId: string) => {
     navigator.clipboard.writeText(text);
-    // You could add a toast notification here
+    setCopiedStates(prev => ({ ...prev, [buttonId]: true }));
+    
+    // Reset the copied state after 2 seconds
+    setTimeout(() => {
+      setCopiedStates(prev => ({ ...prev, [buttonId]: false }));
+    }, 2000);
   };
 
   const getTomorrowMinDate = () => {
@@ -399,10 +406,10 @@ export const CreateEventPage: React.FC = () => {
                         className="flex-1 px-3 py-2 bg-surface-paper border border-neutral-warm rounded text-sm text-text-primary"
                       />
                       <button
-                        onClick={() => copyToClipboard(createdEvent.contributorLink)}
+                        onClick={() => copyToClipboard(createdEvent.contributorLink, 'contributorLink')}
                         className="px-4 py-2 bg-primary-500 text-white rounded text-sm hover:bg-primary-600 transition-colors"
                       >
-                        Copy
+                        {copiedStates.contributorLink ? 'Copied!' : 'Copy'}
                       </button>
                     </div>
                   </div>
@@ -420,10 +427,10 @@ export const CreateEventPage: React.FC = () => {
                         className="flex-1 px-3 py-2 bg-surface-paper border border-neutral-warm rounded text-sm text-text-primary"
                       />
                       <button
-                        onClick={() => copyToClipboard(createdEvent.joinLink)}
+                        onClick={() => copyToClipboard(createdEvent.joinLink, 'joinLink')}
                         className="px-4 py-2 bg-primary-500 text-white rounded text-sm hover:bg-primary-600 transition-colors"
                       >
-                        Copy
+                        {copiedStates.joinLink ? 'Copied!' : 'Copy'}
                       </button>
                     </div>
                     <div className="mt-4 text-xs text-text-muted">
