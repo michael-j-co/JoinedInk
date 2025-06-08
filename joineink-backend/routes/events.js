@@ -353,7 +353,16 @@ router.post('/:eventId/join-circle', async (req, res) => {
       where: { email: email.trim() }
     });
 
-    if (!user) {
+    if (user) {
+      // User exists - verify password to prevent impersonation
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return res.status(409).json({ 
+          error: 'An account with this email already exists. Please use the correct password or try a different email.' 
+        });
+      }
+      // Password is valid - user can proceed with existing account
+    } else {
       // Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
       
@@ -373,6 +382,7 @@ router.post('/:eventId/join-circle', async (req, res) => {
         name: name.trim(),
         email: email.trim(),
         accessToken: uuidv4(),
+        userId: user.id, // Link to user account
         eventId
       }
     });
@@ -390,7 +400,7 @@ router.post('/:eventId/join-circle', async (req, res) => {
     });
 
     res.status(201).json({
-      message: 'Successfully joined circle notes event and created account',
+      message: 'Successfully joined circle notes event',
       contributorToken,
       participant: {
         id: recipient.id,

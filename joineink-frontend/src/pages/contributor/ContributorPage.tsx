@@ -113,10 +113,10 @@ export const ContributorPage: React.FC = () => {
       formData.append('recipientId', selectedRecipient.id);
       formData.append('content', content.text || '');
       formData.append('contributorName', content.contributorName || '');
-      formData.append('fontFamily', content.formatting.fontFamily || '');
+      formData.append('fontFamily', content.formatting?.fontFamily || '');
       formData.append('backgroundColor', content.backgroundColor || '');
       
-      if (content.signature) {
+      if (content.signature?.data) {
         formData.append('signature', content.signature.data);
       }
       
@@ -261,7 +261,7 @@ export const ContributorPage: React.FC = () => {
                   <div className="prose prose-lg max-w-none mb-6">
                     <div 
                       style={{
-                        fontFamily: currentContent.formatting.fontFamily,
+                        fontFamily: currentContent.formatting?.fontFamily,
                       }}
                       className="text-gray-800 leading-relaxed"
                       dangerouslySetInnerHTML={createSafeHtml(currentContent.text)}
@@ -270,7 +270,7 @@ export const ContributorPage: React.FC = () => {
                 )}
 
                 {/* Media content */}
-                {currentContent.media.length > 0 && (
+                {currentContent.media && currentContent.media.length > 0 && (
                   <div className="relative min-h-[200px] mb-6">
                     {currentContent.media.map((item) => (
                       item.position ? (
@@ -309,7 +309,7 @@ export const ContributorPage: React.FC = () => {
                 )}
 
                 {/* Drawings */}
-                {currentContent.drawings.length > 0 && (
+                {currentContent.drawings && currentContent.drawings.length > 0 && (
                   <div className="relative min-h-[200px] mb-6">
                     {currentContent.drawings.map((drawing) => (
                       drawing.position ? (
@@ -356,7 +356,7 @@ export const ContributorPage: React.FC = () => {
                       ) : (
                         <div
                           style={{
-                            fontFamily: currentContent.signature.font || 'Dancing Script, cursive',
+                            fontFamily: currentContent.signature?.font || 'Dancing Script, cursive',
                             fontSize: '24px'
                           }}
                           className="text-gray-700"

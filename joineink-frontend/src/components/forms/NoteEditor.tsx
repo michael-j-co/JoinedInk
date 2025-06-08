@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import SignatureCanvas from 'react-signature-canvas';
+import DOMPurify from 'dompurify';
 import { 
   PhotoIcon, 
   GifIcon, 
@@ -95,7 +96,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   useEffect(() => {
     if (richTextEditorRef.current && initialContent?.text && richTextEditorRef.current.innerHTML !== initialContent.text && !isTypingRef.current) {
       // Only update if the content is actually different and user is not currently typing
-      richTextEditorRef.current.innerHTML = initialContent.text;
+      // Sanitize content to prevent XSS attacks
+      const sanitizedContent = DOMPurify.sanitize(initialContent.text);
+      richTextEditorRef.current.innerHTML = sanitizedContent;
     }
   }, [initialContent]);
 
@@ -103,7 +106,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   useEffect(() => {
     if (richTextEditorRef.current && content.text !== undefined && richTextEditorRef.current.innerHTML !== content.text && !isTypingRef.current) {
       // Update editor content when internal state changes (e.g., when switching back to write tab)
-      richTextEditorRef.current.innerHTML = content.text;
+      // Sanitize content to prevent XSS attacks
+      const sanitizedContent = DOMPurify.sanitize(content.text);
+      richTextEditorRef.current.innerHTML = sanitizedContent;
     }
   }, [content.text, activeTab]); // Include activeTab to trigger sync when switching back to write tab
 
@@ -112,7 +117,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const timer = setTimeout(() => {
       // Strip HTML tags to get plain text for counting
       const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = content.text || '';
+      // Sanitize content before using innerHTML
+      const sanitizedContent = DOMPurify.sanitize(content.text || '');
+      tempDiv.innerHTML = sanitizedContent;
       const textContent = tempDiv.textContent || tempDiv.innerText || '';
       
       const words = textContent.trim().split(/\s+/).filter(word => word.length > 0);

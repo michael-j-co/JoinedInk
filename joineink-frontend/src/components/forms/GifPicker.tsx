@@ -13,7 +13,9 @@ const GIPHY_API_KEY = process.env.REACT_APP_GIPHY_API_KEY;
 
 if (!GIPHY_API_KEY) {
   console.warn('REACT_APP_GIPHY_API_KEY not found in environment variables. Please create .env file with your API key.');
-  console.log('Current environment variables:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP_')));
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Current environment variables:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP_')));
+  }
 }
 
 // Temporary fallback while setting up environment variables

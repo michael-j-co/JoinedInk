@@ -47,7 +47,8 @@ router.get('/session/:token', async (req, res) => {
               select: {
                 id: true,
                 name: true,
-                email: true
+                email: true,
+                userId: true
               }
             }
           }
@@ -76,7 +77,9 @@ router.get('/session/:token', async (req, res) => {
     // For Circle Notes, filter out the current user from recipients so they can't write to themselves
     let recipients = session.event.recipients;
     if (session.event.eventType === 'CIRCLE_NOTES' && session.user) {
-      recipients = recipients.filter(recipient => recipient.email !== session.user.email);
+      // Filter out recipients where userId matches the current user's ID
+      // This is the most reliable way to prevent users from writing to themselves
+      recipients = recipients.filter(recipient => recipient.userId !== session.user.id);
     }
 
     res.json({

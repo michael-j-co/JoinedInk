@@ -34,28 +34,46 @@ export const CircleJoinPage: React.FC = () => {
   const [joining, setJoining] = useState(false);
 
   useEffect(() => {
-    if (token) {
-      fetchJoinInfo();
-    }
-  }, [token]);
+    if (!token) return;
 
-  const fetchJoinInfo = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`/api/contributions/session/${token}`);
-      setJoinInfo(response.data);
-    } catch (err: any) {
-      if (err.response?.status === 404) {
-        setError('Invalid join link. Please check the URL and try again.');
-      } else if (err.response?.status === 410) {
-        setError(err.response.data.error || 'This join link has expired.');
-      } else {
-        setError('Failed to load event information. Please try again.');
+    // Create AbortController to handle request cancellation
+    const abortController = new AbortController();
+
+    const fetchJoinInfo = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`/api/contributions/session/${token}`, {
+          signal: abortController.signal
+        });
+        setJoinInfo(response.data);
+      } catch (err: any) {
+        // Don't update state if the request was cancelled due to component unmount
+        if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+          return;
+        }
+        
+        if (err.response?.status === 404) {
+          setError('Invalid join link. Please check the URL and try again.');
+        } else if (err.response?.status === 410) {
+          setError(err.response.data.error || 'This join link has expired.');
+        } else {
+          setError('Failed to load event information. Please try again.');
+        }
+      } finally {
+        // Only update loading state if request wasn't cancelled
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+    fetchJoinInfo();
+
+    // Cleanup function to cancel the request if component unmounts
+    return () => {
+      abortController.abort();
+    };
+  }, [token]);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -69,6 +69,7 @@ CREATE TABLE "contributor_sessions" (
     "id" TEXT NOT NULL,
     "token" TEXT NOT NULL,
     "eventId" TEXT NOT NULL,
+    "userId" TEXT,
     "completedRecipients" TEXT[],
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "expiresAt" TIMESTAMP(3) NOT NULL,
@@ -102,3 +103,6 @@ ALTER TABLE "contributions" ADD CONSTRAINT "contributions_contributorUserId_fkey
 
 -- AddForeignKey
 ALTER TABLE "contributor_sessions" ADD CONSTRAINT "contributor_sessions_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "contributor_sessions" ADD CONSTRAINT "contributor_sessions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;

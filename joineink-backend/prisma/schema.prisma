@@ -25,6 +25,8 @@ model User {
   events    Event[]
   // User can have multiple contributor sessions
   contributorSessions ContributorSession[]
+  // User can be a recipient in multiple events
+  recipients Recipient[]
   
   @@map("users")
 }
@@ -66,11 +68,13 @@ model Recipient {
   name      String
   email     String
   accessToken String @unique // Unique token for accessing their keepsake book
+  userId    String?  // Link to user account (nullable for backward compatibility)
   createdAt DateTime @default(now())
   
-  // Recipient belongs to one event
+  // Recipient belongs to one event and optionally one user
   eventId String
   event   Event  @relation(fields: [eventId], references: [id])
+  user    User?  @relation(fields: [userId], references: [id])
   
   // Recipient can have multiple contributions written for them
   contributions Contribution[]
