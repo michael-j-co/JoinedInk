@@ -13,6 +13,9 @@ const recipientRoutes = require('./routes/recipients');
 const app = express();
 const prisma = new PrismaClient();
 
+// Trust proxy headers - needed for rate limiting to work properly
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(helmet());
 app.use(cors({
@@ -20,10 +23,16 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting
+// Rate limiting - configured to work properly in development
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // Use a simple key generator for development
+  keyGenerator: (req) => {
+    return req.ip || req.connection.remoteAddress || 'unknown';
+  }
 });
 app.use(limiter);
 

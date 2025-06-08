@@ -252,7 +252,7 @@ export const CreateEventPage: React.FC = () => {
                     value={formData.deadline}
                     onChange={(e) => handleInputChange('deadline', e.target.value)}
                     min={getTomorrowMinDate()}
-                    className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary"
+                    className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary custom-date-input"
                   />
                 </div>
 

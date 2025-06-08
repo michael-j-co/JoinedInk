@@ -23,6 +23,8 @@ model User {
   
   // User can organize multiple events
   events    Event[]
+  // User can have multiple contributor sessions
+  contributorSessions ContributorSession[]
   
   @@map("users")
 }
@@ -54,6 +56,7 @@ model Event {
   // Event can have multiple recipients
   recipients    Recipient[]
   contributions Contribution[]
+  contributorSessions ContributorSession[]
   
   @@map("events")
 }
@@ -107,12 +110,17 @@ model ContributorSession {
   id        String   @id @default(cuid())
   token     String   @unique
   eventId   String
+  userId    String?  // Link to user account (nullable for backward compatibility)
   
   // For circle notes - track which recipients this contributor has written for
   completedRecipients String[] // Array of recipient IDs
   
   createdAt DateTime @default(now())
   expiresAt DateTime
+  
+  // ContributorSession belongs to one event and optionally one user
+  event     Event    @relation(fields: [eventId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
   
   @@map("contributor_sessions")
 }

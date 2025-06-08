@@ -771,7 +771,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                       <select
                         value={signatureFont}
                         onChange={(e) => setSignatureFont(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary custom-select"
                       >
                         <option value="Dancing Script, cursive">Dancing Script</option>
                         <option value="Pacifico, cursive">Pacifico</option>
@@ -784,7 +784,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                       value={typedSignature}
                       onChange={(e) => setTypedSignature(e.target.value)}
                       placeholder="Type your signature"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary custom-input"
                       style={{ fontFamily: signatureFont, fontSize: '24px' }}
                     />
                     <button

@@ -51,6 +51,12 @@ router.get('/session/:token', async (req, res) => {
               }
             }
           }
+        },
+        user: {
+          select: {
+            id: true,
+            email: true
+          }
         }
       }
     });
@@ -67,6 +73,12 @@ router.get('/session/:token', async (req, res) => {
       return res.status(410).json({ error: 'This event has been closed' });
     }
 
+    // For Circle Notes, filter out the current user from recipients so they can't write to themselves
+    let recipients = session.event.recipients;
+    if (session.event.eventType === 'CIRCLE_NOTES' && session.user) {
+      recipients = recipients.filter(recipient => recipient.email !== session.user.email);
+    }
+
     res.json({
       event: {
         id: session.event.id,
@@ -75,8 +87,12 @@ router.get('/session/:token', async (req, res) => {
         eventType: session.event.eventType,
         deadline: session.event.deadline
       },
-      recipients: session.event.recipients,
-      completedRecipients: session.completedRecipients || []
+      recipients: recipients,
+      completedRecipients: session.completedRecipients || [],
+      currentUser: session.user ? {
+        id: session.user.id,
+        email: session.user.email
+      } : null
     });
   } catch (error) {
     console.error('Get session error:', error);
