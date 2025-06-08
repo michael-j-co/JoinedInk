@@ -1,12 +1,25 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { NoteContent, BackgroundTheme } from '../../types';
+import { DraggableMedia } from './DraggableMedia';
+import { createSafeHtml } from '../../utils/sanitizeHtml';
 
 interface NotePreviewProps {
   content: NoteContent;
   theme: BackgroundTheme;
+  onMediaPositionChange?: (itemId: string, position: { x: number; y: number }) => void;
+  onDrawingPositionChange?: (drawingId: string, position: { x: number; y: number }) => void;
+  isInteractive?: boolean;
 }
 
-export const NotePreview: React.FC<NotePreviewProps> = ({ content, theme }) => {
+export const NotePreview: React.FC<NotePreviewProps> = ({ 
+  content, 
+  theme, 
+  onMediaPositionChange,
+  onDrawingPositionChange,
+  isInteractive = false 
+}) => {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const bodyAreaRef = useRef<HTMLDivElement>(null);
   const formatText = (text: string) => {
     return text.split('\n').map((line, index) => (
       <React.Fragment key={index}>
@@ -40,7 +53,9 @@ export const NotePreview: React.FC<NotePreviewProps> = ({ content, theme }) => {
         </div>
 
         {/* Main message content */}
-        <div className="space-y-6">
+        <div ref={contentRef} className="space-y-6 relative min-h-[300px]">
+          {/* Drag bounds area - invisible container for better positioning */}
+          <div ref={bodyAreaRef} className="absolute inset-0 pointer-events-none" />
           {/* Text content */}
           {content.text && (
             <div
@@ -52,43 +67,119 @@ export const NotePreview: React.FC<NotePreviewProps> = ({ content, theme }) => {
             >
               <div 
                 className="text-gray-800 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: content.text }}
+                dangerouslySetInnerHTML={createSafeHtml(content.text)}
               />
             </div>
           )}
 
           {/* Media content */}
           {content.media.length > 0 && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4">
-                {content.media.map((item) => (
-                  <div key={item.id} className="flex justify-center">
-                    <img
-                      src={item.url}
-                      alt={item.alt}
-                      className={`max-w-full h-auto rounded-lg shadow-sm ${
-                        item.type === 'sticker' ? 'max-h-16 w-auto' : 'max-h-48'
-                      }`}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+            <>
+              {isInteractive ? (
+                // Interactive draggable media
+                content.media.map((item) => (
+                  <DraggableMedia
+                    key={item.id}
+                    item={item}
+                    onPositionChange={(id, position) => 
+                      onMediaPositionChange?.(id, position)
+                    }
+                    containerRef={bodyAreaRef}
+                    isPreviewMode={!isInteractive}
+                  />
+                ))
+              ) : (
+                // Static media layout for non-interactive previews
+                <div className="relative min-h-[200px] mb-4">
+                  {content.media.map((item) => (
+                    item.position ? (
+                      // Positioned media (preserve layout from interactive mode)
+                      <div
+                        key={item.id}
+                        className="absolute"
+                        style={{
+                          left: `${item.position.x}px`,
+                          top: `${item.position.y}px`,
+                          zIndex: item.position.zIndex || 1
+                        }}
+                      >
+                        <img
+                          src={item.url}
+                          alt={item.alt}
+                          className={`rounded-lg shadow-sm ${
+                            item.type === 'sticker' ? 'max-h-16 w-auto' : 'max-h-32'
+                          }`}
+                        />
+                      </div>
+                    ) : (
+                      // Fallback to centered layout for items without position
+                      <div key={item.id} className="flex justify-center mb-4">
+                        <img
+                          src={item.url}
+                          alt={item.alt}
+                          className={`max-w-full h-auto rounded-lg shadow-sm ${
+                            item.type === 'sticker' ? 'max-h-16 w-auto' : 'max-h-48'
+                          }`}
+                        />
+                      </div>
+                    )
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* Drawings */}
           {content.drawings.length > 0 && (
-            <div className="space-y-4">
-              {content.drawings.map((drawing) => (
-                <div key={drawing.id} className="flex justify-center">
-                  <img
-                    src={drawing.dataUrl}
-                    alt="Drawing"
-                    className="max-w-full h-auto rounded-lg shadow-sm max-h-48"
+            <>
+              {isInteractive ? (
+                // Interactive draggable drawings
+                content.drawings.map((drawing) => (
+                  <DraggableMedia
+                    key={drawing.id}
+                    item={drawing}
+                    onPositionChange={(id, position) => 
+                      onDrawingPositionChange?.(id, position)
+                    }
+                    containerRef={bodyAreaRef}
+                    isPreviewMode={!isInteractive}
                   />
+                ))
+              ) : (
+                // Static drawings layout for non-interactive previews
+                <div className="relative min-h-[200px] mb-4">
+                  {content.drawings.map((drawing) => (
+                    drawing.position ? (
+                      // Positioned drawings (preserve layout from interactive mode)
+                      <div
+                        key={drawing.id}
+                        className="absolute"
+                        style={{
+                          left: `${drawing.position.x}px`,
+                          top: `${drawing.position.y}px`,
+                          zIndex: drawing.position.zIndex || 1
+                        }}
+                      >
+                        <img
+                          src={drawing.dataUrl}
+                          alt="Drawing"
+                          className="rounded-lg shadow-sm max-h-32"
+                        />
+                      </div>
+                    ) : (
+                      // Fallback to centered layout for drawings without position
+                      <div key={drawing.id} className="flex justify-center mb-4">
+                        <img
+                          src={drawing.dataUrl}
+                          alt="Drawing"
+                          className="max-w-full h-auto rounded-lg shadow-sm max-h-48"
+                        />
+                      </div>
+                    )
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
 
           {/* Signature */}

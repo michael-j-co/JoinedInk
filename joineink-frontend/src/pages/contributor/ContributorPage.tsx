@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { NoteEditor } from '../../components/forms/NoteEditor';
 import { NoteContent, BackgroundTheme } from '../../types';
+import { createSafeHtml } from '../../utils/sanitizeHtml';
 
 export const ContributorPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [previewContent, setPreviewContent] = useState<NoteContent | null>(null);
+  const [currentContent, setCurrentContent] = useState<NoteContent | null>(null);
 
   // Mock data - in production, this would come from URL params or API
   const mockEvent = {
@@ -45,11 +46,18 @@ export const ContributorPage: React.FC = () => {
   };
 
   const handlePreview = (content: NoteContent) => {
-    setPreviewContent(content);
+    setCurrentContent(content);
     setShowPreview(true);
   };
 
-  if (showPreview && previewContent) {
+  const handleContentChange = (content: NoteContent) => {
+    setCurrentContent(content);
+  };
+
+  if (showPreview && currentContent) {
+    // Cache the theme lookup to avoid multiple find calls
+    const selectedTheme = BACKGROUND_THEMES.find(t => t.id === currentContent.backgroundColor) || BACKGROUND_THEMES[0];
+    
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-4xl mx-auto p-6">
@@ -67,91 +75,127 @@ export const ContributorPage: React.FC = () => {
             <div className="max-w-2xl mx-auto">
               {/* Full preview with background theme */}
               <div
-                className={`p-8 ${
-                  BACKGROUND_THEMES.find(t => t.id === previewContent.backgroundColor)?.gradient ||
-                  BACKGROUND_THEMES.find(t => t.id === previewContent.backgroundColor)?.cssClass ||
-                  'bg-white'
-                }`}
+                className={`p-8 ${selectedTheme.gradient || selectedTheme.cssClass || 'bg-white'}`}
                 style={{
-                  background: BACKGROUND_THEMES.find(t => t.id === previewContent.backgroundColor)?.gradient
-                    ? undefined
-                    : BACKGROUND_THEMES.find(t => t.id === previewContent.backgroundColor)?.preview
+                  background: selectedTheme.gradient ? undefined : selectedTheme.preview
                 }}
               >
                 {/* Header */}
                 <div className="text-center mb-8 pb-4 border-b border-gray-200">
                   <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    For {previewContent.recipientName}
+                    For {currentContent.recipientName}
                   </h2>
-                  {previewContent.contributorName && (
-                    <p className="text-gray-600">From {previewContent.contributorName}</p>
+                  {currentContent.contributorName && (
+                    <p className="text-gray-600">From {currentContent.contributorName}</p>
                   )}
                 </div>
                 
                 {/* Text content */}
-                {previewContent.text && (
+                {currentContent.text && (
                   <div className="prose prose-lg max-w-none mb-6">
                     <div 
                       style={{
-                        fontFamily: previewContent.formatting.fontFamily,
+                        fontFamily: currentContent.formatting.fontFamily,
                       }}
                       className="text-gray-800 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: previewContent.text }}
+                      dangerouslySetInnerHTML={createSafeHtml(currentContent.text)}
                     />
                   </div>
                 )}
 
                 {/* Media content */}
-                {previewContent.media.length > 0 && (
-                  <div className="space-y-4 mb-6">
-                    {previewContent.media.map((item) => (
-                      <div key={item.id} className="flex justify-center">
-                        <img
-                          src={item.url}
-                          alt={item.alt}
-                          className={`max-w-full h-auto rounded-lg shadow-sm ${
-                            item.type === 'sticker' ? 'max-h-16 w-auto' : 'max-h-48'
-                          }`}
-                        />
-                      </div>
+                {currentContent.media.length > 0 && (
+                  <div className="relative min-h-[200px] mb-6">
+                    {currentContent.media.map((item) => (
+                      item.position ? (
+                        // Positioned media
+                        <div
+                          key={item.id}
+                          className="absolute"
+                          style={{
+                            left: `${item.position.x}px`,
+                            top: `${item.position.y}px`,
+                            zIndex: item.position.zIndex || 1
+                          }}
+                        >
+                          <img
+                            src={item.url}
+                            alt={item.alt}
+                            className={`rounded-lg shadow-sm ${
+                              item.type === 'sticker' ? 'max-h-16 w-auto' : 'max-h-32'
+                            }`}
+                          />
+                        </div>
+                      ) : (
+                        // Fallback to centered layout for items without position
+                        <div key={item.id} className="flex justify-center mb-4">
+                          <img
+                            src={item.url}
+                            alt={item.alt}
+                            className={`max-w-full h-auto rounded-lg shadow-sm ${
+                              item.type === 'sticker' ? 'max-h-16 w-auto' : 'max-h-48'
+                            }`}
+                          />
+                        </div>
+                      )
                     ))}
                   </div>
                 )}
 
                 {/* Drawings */}
-                {previewContent.drawings.length > 0 && (
-                  <div className="space-y-4 mb-6">
-                    {previewContent.drawings.map((drawing) => (
-                      <div key={drawing.id} className="flex justify-center">
-                        <img
-                          src={drawing.dataUrl}
-                          alt="Drawing"
-                          className="max-w-full h-auto rounded-lg shadow-sm max-h-48"
-                        />
-                      </div>
+                {currentContent.drawings.length > 0 && (
+                  <div className="relative min-h-[200px] mb-6">
+                    {currentContent.drawings.map((drawing) => (
+                      drawing.position ? (
+                        // Positioned drawings
+                        <div
+                          key={drawing.id}
+                          className="absolute"
+                          style={{
+                            left: `${drawing.position.x}px`,
+                            top: `${drawing.position.y}px`,
+                            zIndex: drawing.position.zIndex || 1
+                          }}
+                        >
+                          <img
+                            src={drawing.dataUrl}
+                            alt="Drawing"
+                            className="rounded-lg shadow-sm max-h-32"
+                          />
+                        </div>
+                      ) : (
+                        // Fallback to centered layout for drawings without position
+                        <div key={drawing.id} className="flex justify-center mb-4">
+                          <img
+                            src={drawing.dataUrl}
+                            alt="Drawing"
+                            className="max-w-full h-auto rounded-lg shadow-sm max-h-48"
+                          />
+                        </div>
+                      )
                     ))}
                   </div>
                 )}
 
                 {/* Signature */}
-                {previewContent.signature && (
+                {currentContent.signature && (
                   <div className="mt-8 pt-4 border-t border-gray-300">
                     <div className="flex justify-end">
-                      {previewContent.signature.type === 'drawn' ? (
+                      {currentContent.signature.type === 'drawn' ? (
                         <img
-                          src={previewContent.signature.data}
+                          src={currentContent.signature.data}
                           alt="Signature"
                           className="max-h-16 w-auto"
                         />
                       ) : (
                         <div
                           style={{
-                            fontFamily: previewContent.signature.font || 'Dancing Script, cursive',
+                            fontFamily: currentContent.signature.font || 'Dancing Script, cursive',
                             fontSize: '24px'
                           }}
                           className="text-gray-700"
                         >
-                          {previewContent.signature.data}
+                          {currentContent.signature.data}
                         </div>
                       )}
                     </div>
@@ -168,7 +212,7 @@ export const ContributorPage: React.FC = () => {
                   Edit Message
                 </button>
                 <button
-                  onClick={() => handleSave(previewContent)}
+                  onClick={() => handleSave(currentContent)}
                   disabled={isSubmitting}
                   className="px-8 py-2 bg-rose-500 text-white rounded-md hover:bg-rose-600 disabled:opacity-50"
                 >
@@ -187,8 +231,10 @@ export const ContributorPage: React.FC = () => {
       <NoteEditor
         recipientName={mockEvent.recipientName}
         eventTitle={mockEvent.eventTitle}
+        initialContent={currentContent ? currentContent : undefined}
         onSave={handleSave}
         onPreview={handlePreview}
+        onContentChange={handleContentChange}
         isSubmitting={isSubmitting}
       />
     </div>
