@@ -124,4 +124,49 @@ export interface GiphyGif {
       height: string;
     };
   };
+}
+
+// Keepsake book types
+export interface KeepsakeContribution {
+  id: string;
+  content: string;
+  contributorName?: string;
+  fontFamily?: string;
+  backgroundColor?: string;
+  signature?: any;
+  images?: string[];
+  stickers?: string[];
+  drawings?: any;
+  media?: MediaItem[];
+  formatting?: {
+    fontFamily?: string;
+    fontSize?: string;
+    bold?: boolean;
+    italic?: boolean;
+  };
+  createdAt: string;
+}
+
+export interface KeepsakeBook {
+  recipient: {
+    name: string;
+  };
+  event: {
+    id: string;
+    title: string;
+    description?: string;
+    eventType: 'INDIVIDUAL_TRIBUTE' | 'CIRCLE_NOTES';
+    status: 'OPEN' | 'CLOSED';
+  };
+  contributions: KeepsakeContribution[];
+  totalContributions: number;
+}
+
+export interface KeepsakeBookResponse {
+  keepsakeBook: KeepsakeBook;
+}
+
+export interface ShareLinkResponse {
+  shareableLink: string;
+  message: string;
 } 

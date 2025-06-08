@@ -35,6 +35,8 @@ router.get('/keepsake/:accessToken', async (req, res) => {
             images: true,
             stickers: true,
             drawings: true,
+            media: true,
+            formatting: true,
             createdAt: true
           },
           orderBy: { createdAt: 'asc' }
@@ -95,6 +97,8 @@ router.get('/keepsake/:accessToken/pdf', async (req, res) => {
             images: true,
             stickers: true,
             drawings: true,
+            media: true,
+            formatting: true,
             createdAt: true
           },
           orderBy: { createdAt: 'asc' }
@@ -143,6 +147,91 @@ router.get('/keepsake/:accessToken/pdf', async (req, res) => {
   } catch (error) {
     console.error('Generate PDF error:', error);
     res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+
+// Download raw content as ZIP
+router.get('/keepsake/:accessToken/download', async (req, res) => {
+  try {
+    const { accessToken } = req.params;
+
+    const recipient = await prisma.recipient.findUnique({
+      where: { accessToken },
+      include: {
+        event: {
+          select: {
+            title: true,
+            status: true
+          }
+        },
+        contributions: {
+          select: {
+            id: true,
+            content: true,
+            contributorName: true,
+            images: true,
+            drawings: true,
+            signature: true,
+            media: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+
+    if (!recipient) {
+      return res.status(404).json({ error: 'Keepsake book not found' });
+    }
+
+    if (recipient.event.status !== 'CLOSED') {
+      return res.status(400).json({ error: 'Keepsake book is not ready yet' });
+    }
+
+    const archiver = require('archiver');
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="keepsake-content-${recipient.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.zip"`);
+
+    archive.pipe(res);
+
+    // Add text content for each contribution
+    recipient.contributions.forEach((contribution, index) => {
+      const contributorLabel = contribution.contributorName || `Anonymous_${index + 1}`;
+      const filename = `${String(index + 1).padStart(2, '0')}_${contributorLabel.replace(/[^a-z0-9]/gi, '_')}.txt`;
+      
+      let content = `Contribution ${index + 1}\n`;
+      content += `Contributor: ${contribution.contributorName || 'Anonymous'}\n`;
+      content += `Date: ${new Date(contribution.createdAt).toLocaleDateString()}\n`;
+      content += `\n${'-'.repeat(50)}\n\n`;
+      content += contribution.content || '';
+      
+      archive.append(content, { name: filename });
+    });
+
+    // Add a README file
+    const readmeContent = `Keepsake Book Raw Content
+========================
+
+Event: ${recipient.event.title}
+Recipient: ${recipient.name}
+Total Contributions: ${recipient.contributions.length}
+Downloaded: ${new Date().toLocaleString()}
+
+This archive contains the raw text content of all contributions.
+Images, drawings, and signatures are not included in this download.
+For the complete keepsake book with media, please download the PDF version.
+
+Contributions are numbered and named by contributor (or "Anonymous" if no name was provided).
+`;
+
+    archive.append(readmeContent, { name: 'README.txt' });
+
+    await archive.finalize();
+  } catch (error) {
+    console.error('Download raw content error:', error);
+    res.status(500).json({ error: 'Failed to generate download' });
   }
 });
 
@@ -195,10 +284,23 @@ function generateKeepsakeBookHTML(recipient) {
     const fontFamily = contribution.fontFamily || 'Arial, sans-serif';
     
     let imagesHTML = '';
+    
+    // Handle legacy images
     if (contribution.images && contribution.images.length > 0) {
-      imagesHTML = contribution.images.map(img => 
+      imagesHTML += contribution.images.map(img => 
         `<img src="${img}" style="max-width: 100%; margin: 10px 0; border-radius: 8px;" alt="Contribution image" />`
       ).join('');
+    }
+    
+    // Handle new media format
+    if (contribution.media && contribution.media.length > 0) {
+      imagesHTML += contribution.media.map(mediaItem => {
+        if (mediaItem.type === 'sticker') {
+          return `<img src="${mediaItem.url}" style="max-width: 100px; margin: 5px; display: inline-block;" alt="${mediaItem.alt || 'Sticker'}" />`;
+        } else {
+          return `<img src="${mediaItem.url}" style="max-width: 100%; margin: 10px 0; border-radius: 8px;" alt="${mediaItem.alt || 'Media'}" />`;
+        }
+      }).join('');
     }
 
     let signatureHTML = '';
