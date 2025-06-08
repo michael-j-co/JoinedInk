@@ -28,6 +28,9 @@ export const CircleJoinPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [joinInfo, setJoinInfo] = useState<JoinInfo | null>(null);
+  const [activeTab, setActiveTab] = useState<'signin' | 'register'>('signin');
+  
+  // Form states
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -77,14 +80,20 @@ export const CircleJoinPage: React.FC = () => {
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !password.trim() || !joinInfo) return;
+    if (!email.trim() || !password.trim() || !joinInfo) return;
+    
+    // For registration, name is required
+    if (activeTab === 'register' && !name.trim()) return;
 
     try {
       setJoining(true);
+      setError('');
       
-      // Create a recipient and account for this person in the circle notes event
+      // For sign-in, we'll use a placeholder name that gets updated from the backend
+      const submitName = activeTab === 'signin' ? 'Existing User' : name.trim();
+      
       const response = await axios.post(`/api/events/${joinInfo.event.id}/join-circle`, {
-        name: name.trim(),
+        name: submitName,
         email: email.trim(),
         password: password.trim(),
         joinToken: token
@@ -94,7 +103,21 @@ export const CircleJoinPage: React.FC = () => {
       navigate(`/contribute/${response.data.contributorToken}`);
       
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to join the circle. Please try again.');
+      const errorMessage = err.response?.data?.error || 'Failed to join the circle. Please try again.';
+      
+      // Handle specific error cases
+      if (errorMessage.includes('account with this email already exists')) {
+        if (activeTab === 'register') {
+          setError('An account with this email already exists. Please use the "Sign In" tab instead.');
+        } else {
+          setError(errorMessage);
+        }
+      } else if (errorMessage.includes('Invalid credentials') || errorMessage.includes('correct password')) {
+        setError('Invalid email or password. Please check your credentials and try again.');
+      } else {
+        setError(errorMessage);
+      }
+      
       setJoining(false);
     }
   };
@@ -108,6 +131,15 @@ export const CircleJoinPage: React.FC = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleTabSwitch = (tab: 'signin' | 'register') => {
+    setActiveTab(tab);
+    setError('');
+    // Clear form when switching tabs
+    if (tab === 'signin') {
+      setName('');
+    }
   };
 
   if (loading) {
@@ -126,7 +158,7 @@ export const CircleJoinPage: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && !joinInfo) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-cream to-neutral-ivory p-6 flex items-center justify-center">
         <div className="bg-surface-paper rounded-2xl shadow-soft-lg p-8 border border-surface-border max-w-lg w-full text-center">
@@ -160,7 +192,7 @@ export const CircleJoinPage: React.FC = () => {
           <div className="text-center">
             <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-3">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 919.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
             <h1 className="text-2xl font-bold mb-2">Join Circle Notes</h1>
@@ -184,7 +216,7 @@ export const CircleJoinPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-2 text-sm text-text-secondary">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 919.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 915.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 919.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
                 <span>{joinInfo.recipients.length} people already joined</span>
               </div>
@@ -195,7 +227,7 @@ export const CircleJoinPage: React.FC = () => {
           <div className="mb-6 p-4 bg-primary-50 rounded-lg border border-primary-200">
             <h3 className="font-semibold text-text-primary mb-2">How Circle Notes Works:</h3>
             <ul className="text-sm text-text-secondary space-y-1">
-              <li>• Create an account to join this circle</li>
+              <li>• Sign in or create an account to join this circle</li>
               <li>• Write heartfelt messages for everyone else in the group</li>
               <li>• Each person receives their own personalized keepsake book</li>
               <li>• You can include photos, drawings, and creative decorations</li>
@@ -203,21 +235,57 @@ export const CircleJoinPage: React.FC = () => {
             </ul>
           </div>
 
+          {/* Sign In / Register Tabs */}
+          <div className="mb-6">
+            <div className="flex bg-neutral-ivory rounded-lg p-1">
+              <button
+                onClick={() => handleTabSwitch('signin')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'signin'
+                    ? 'bg-white text-primary-600 shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => handleTabSwitch('register')}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  activeTab === 'register'
+                    ? 'bg-white text-primary-600 shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
+
           {/* Join Form */}
           <form onSubmit={handleJoin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                Your Full Name *
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your full name"
-                required
-                className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary"
-              />
-            </div>
+            {/* Name field - only for registration */}
+            {activeTab === 'register' && (
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Your Full Name *
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your full name"
+                  required
+                  className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -231,41 +299,48 @@ export const CircleJoinPage: React.FC = () => {
                 required
                 className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary"
               />
-              <p className="text-xs text-text-muted mt-1">
-                We'll use this to send you your personalized keepsake book
-              </p>
+              {activeTab === 'register' && (
+                <p className="text-xs text-text-muted mt-1">
+                  We'll use this to send you your personalized keepsake book
+                </p>
+              )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-2">
-                Create Password *
+                {activeTab === 'signin' ? 'Password' : 'Create Password'} *
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Create a secure password"
+                placeholder={activeTab === 'signin' ? 'Enter your password' : 'Create a secure password'}
                 required
-                minLength={6}
+                minLength={activeTab === 'register' ? 6 : 1}
                 className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary"
               />
-              <p className="text-xs text-text-muted mt-1">
-                You'll need this to contribute to other events in the future
-              </p>
+              {activeTab === 'register' && (
+                <p className="text-xs text-text-muted mt-1">
+                  You'll need this to contribute to other events in the future
+                </p>
+              )}
             </div>
 
             <button
               type="submit"
-              disabled={joining || !name.trim() || !email.trim() || !password.trim()}
+              disabled={joining || !email.trim() || !password.trim() || (activeTab === 'register' && !name.trim())}
               className="w-full bg-gradient-to-r from-accent-rose to-primary-500 text-white py-3 px-4 rounded-lg font-medium hover:from-accent-rose hover:to-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-warm"
             >
-              {joining ? 'Creating Account & Joining...' : 'Create Account & Join Circle'}
+              {joining 
+                ? (activeTab === 'signin' ? 'Signing In...' : 'Creating Account & Joining...') 
+                : (activeTab === 'signin' ? 'Sign In & Join Circle' : 'Create Account & Join Circle')
+              }
             </button>
           </form>
 
           <div className="mt-4 text-center">
             <p className="text-xs text-text-muted">
-              By joining, you agree to create an account and write meaningful messages for all other participants.
+              By joining, you agree to {activeTab === 'register' ? 'create an account and ' : ''}write meaningful messages for all other participants.
             </p>
           </div>
         </div>

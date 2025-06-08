@@ -531,9 +531,12 @@ router.post('/:eventId/join-circle', async (req, res) => {
     }
 
     // Create recipient for the new participant
+    // Use the user's actual name for existing users, or the provided name for new users
+    const recipientName = user.name || name.trim();
+    
     const recipient = await prisma.recipient.create({
       data: {
-        name: name.trim(),
+        name: recipientName,
         email: email.trim(),
         accessToken: uuidv4(),
         userId: user.id, // Link to user account
