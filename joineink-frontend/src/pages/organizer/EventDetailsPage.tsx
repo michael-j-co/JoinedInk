@@ -3,6 +3,30 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import axios from 'axios';
 
+interface Contribution {
+  id: string;
+  content: string;
+  contributorName: string;
+  fontFamily: string;
+  backgroundColor: string;
+  signature: any;
+  images: string[];
+  stickers: string[];
+  drawings: any;
+  media: any;
+  formatting: any;
+  createdAt: string;
+}
+
+interface ContributionsByRecipient {
+  recipient: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  contributions: Contribution[];
+}
+
 interface EventDetails {
   id: string;
   title: string;
@@ -44,6 +68,14 @@ export const EventDetailsPage: React.FC = () => {
   const [showLinksModal, setShowLinksModal] = useState(false);
   const [contributorLinks, setContributorLinks] = useState<any>({});
   const [copiedStates, setCopiedStates] = useState<{[key: string]: boolean}>({});
+  
+  // New state for contributions and modals
+  const [contributions, setContributions] = useState<ContributionsByRecipient[]>([]);
+  const [showContributionsModal, setShowContributionsModal] = useState(false);
+  const [contributionsLoading, setContributionsLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showSendKeepsakeConfirm, setShowSendKeepsakeConfirm] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (eventId) {
@@ -67,16 +99,7 @@ export const EventDetailsPage: React.FC = () => {
     }
   };
 
-  const closeEvent = async () => {
-    if (!event || event.userRole !== 'organizer') return;
-    
-    try {
-      await axios.post(`/api/events/${eventId}/close`);
-      await fetchEventDetails(); // Refresh event data
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to close event');
-    }
-  };
+
 
   const getContributorLinks = async () => {
     if (!event || event.userRole !== 'organizer') return;
@@ -106,6 +129,68 @@ export const EventDetailsPage: React.FC = () => {
     setTimeout(() => {
       setCopiedStates(prev => ({ ...prev, [buttonId]: false }));
     }, 2000);
+  };
+
+  // New functions for contribution management
+  const fetchContributions = async () => {
+    if (!event || event.userRole !== 'organizer') return;
+    
+    try {
+      setContributionsLoading(true);
+      const response = await axios.get(`/api/events/${eventId}/contributions`);
+      setContributions(response.data.contributionsByRecipient);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to load contributions');
+    } finally {
+      setContributionsLoading(false);
+    }
+  };
+
+  const viewContributions = async () => {
+    await fetchContributions();
+    setShowContributionsModal(true);
+  };
+
+  const deleteEvent = async () => {
+    if (!event || event.userRole !== 'organizer') return;
+    
+    try {
+      setActionLoading(true);
+      await axios.delete(`/api/events/${eventId}`);
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to delete event');
+    } finally {
+      setActionLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const sendKeepsakeBooks = async () => {
+    if (!event || event.userRole !== 'organizer') return;
+    
+    try {
+      setActionLoading(true);
+      const response = await axios.post(`/api/events/${eventId}/send-keepsake-books`);
+      
+      // Show success message and refresh event data
+      await fetchEventDetails();
+      
+      const { emailsSent, totalRecipients, errors, eventClosed } = response.data;
+      
+      if (errors && errors.length > 0) {
+        alert(`⚠️ Partial Success:\n✅ ${emailsSent} emails sent successfully\n❌ ${errors.length} emails failed\n\nEvent remains OPEN so you can retry sending. Check your email configuration and try again.`);
+      } else if (eventClosed) {
+        alert(`🎉 Event ended successfully!\n\nKeepsake book emails have been sent to all ${emailsSent} recipients. The event is now closed and recipients will receive beautiful personalized emails with links to view their compiled keepsake books.`);
+      } else {
+        alert(`📧 Emails sent successfully!\n\n${emailsSent} keepsake book emails were sent. Event remains open.`);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to send keepsake books');
+    } finally {
+      setActionLoading(false);
+      setShowSendKeepsakeConfirm(false);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -227,14 +312,30 @@ export const EventDetailsPage: React.FC = () => {
                     Get Links
                   </button>
                   
-                  {event.status === 'OPEN' && !expired && (
+                  {event.eventType === 'CIRCLE_NOTES' && event._count.contributions > 0 && (
                     <button
-                      onClick={closeEvent}
-                      className="px-4 py-2 text-accent-terracotta hover:bg-red-50 border border-accent-terracotta rounded-lg transition-colors font-medium"
+                      onClick={viewContributions}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
                     >
-                      Close Event
+                      View Notes
                     </button>
                   )}
+                  
+                  {event.status === 'OPEN' && !expired && event._count.contributions > 0 && (
+                    <button
+                      onClick={() => setShowSendKeepsakeConfirm(true)}
+                      className="px-4 py-2 bg-accent-sage text-white rounded-lg hover:bg-green-600 transition-colors font-medium"
+                    >
+                      Send Keepsake Books
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="px-4 py-2 text-red-600 hover:bg-red-50 border border-red-600 rounded-lg transition-colors font-medium"
+                  >
+                    Delete Event
+                  </button>
                 </>
               ) : (
                 <>
@@ -443,6 +544,175 @@ export const EventDetailsPage: React.FC = () => {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Contributions Modal */}
+        {showContributionsModal && event.userRole === 'organizer' && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-surface-paper rounded-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-surface-border">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-text-primary">
+                    All Contributions - {event.title}
+                  </h3>
+                  <button
+                    onClick={() => setShowContributionsModal(false)}
+                    className="text-text-tertiary hover:text-text-secondary"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6">
+                {contributionsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto"></div>
+                    <p className="text-text-secondary mt-2">Loading contributions...</p>
+                  </div>
+                ) : contributions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-text-secondary">No contributions found.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-8">
+                    {contributions.map((recipientData) => (
+                      <div key={recipientData.recipient.id} className="border border-surface-border rounded-lg p-6">
+                        <h4 className="text-lg font-bold text-text-primary mb-4">
+                          Notes for {recipientData.recipient.name}
+                        </h4>
+                        
+                        {recipientData.contributions.length === 0 ? (
+                          <p className="text-text-secondary italic">No contributions yet</p>
+                        ) : (
+                          <div className="space-y-4">
+                            {recipientData.contributions.map((contribution, index) => (
+                              <div key={contribution.id} className="bg-neutral-ivory rounded-lg p-4 border-l-4 border-primary-500">
+                                <div className="flex items-start justify-between mb-3">
+                                  <div>
+                                    <p className="font-medium text-text-primary">
+                                      From: {contribution.contributorName}
+                                    </p>
+                                    <p className="text-xs text-text-secondary">
+                                      {new Date(contribution.createdAt).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </p>
+                                  </div>
+                                  <span className="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded">
+                                    Note #{index + 1}
+                                  </span>
+                                </div>
+                                
+                                <div className="prose prose-sm max-w-none">
+                                  <div 
+                                    className="whitespace-pre-wrap text-text-primary"
+                                    style={{ 
+                                      fontFamily: contribution.fontFamily || 'Arial',
+                                      backgroundColor: contribution.backgroundColor === 'clean' ? 'transparent' : contribution.backgroundColor
+                                    }}
+                                  >
+                                    {contribution.content}
+                                  </div>
+                                  
+                                  {contribution.images && contribution.images.length > 0 && (
+                                    <div className="mt-3">
+                                      <p className="text-sm font-medium text-text-secondary mb-2">Images:</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {contribution.images.map((image, imgIndex) => (
+                                          <img 
+                                            key={imgIndex}
+                                            src={image} 
+                                            alt={`Contribution image ${imgIndex + 1}`}
+                                            className="w-20 h-20 object-cover rounded border"
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {contribution.signature && (
+                                    <div className="mt-3">
+                                      <p className="text-sm font-medium text-text-secondary mb-1">Signature:</p>
+                                      <div className="text-lg" style={{ fontFamily: 'cursive' }}>
+                                        {typeof contribution.signature === 'string' ? contribution.signature : 'Digital Signature'}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-surface-paper rounded-xl p-6 max-w-md w-full">
+              <h3 className="text-lg font-bold text-text-primary mb-4">Delete Event</h3>
+              <p className="text-text-secondary mb-6">
+                Are you sure you want to delete this event? This action cannot be undone and will remove all contributions.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 px-4 py-2 text-text-secondary border border-neutral-warm rounded-lg hover:bg-neutral-ivory transition-colors"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={deleteEvent}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? 'Deleting...' : 'Delete Event'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Send Keepsake Books Confirmation Modal */}
+        {showSendKeepsakeConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-surface-paper rounded-xl p-6 max-w-md w-full">
+              <h3 className="text-lg font-bold text-text-primary mb-4">Send Keepsake Books</h3>
+              <p className="text-text-secondary mb-6">
+                This will send keepsake book emails to all participants. If all emails are sent successfully, the event will be closed automatically. If any emails fail, the event remains open for retry.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowSendKeepsakeConfirm(false)}
+                  className="flex-1 px-4 py-2 text-text-secondary border border-neutral-warm rounded-lg hover:bg-neutral-ivory transition-colors"
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={sendKeepsakeBooks}
+                  className="flex-1 px-4 py-2 bg-accent-sage text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? 'Sending...' : 'Send Keepsake Books'}
+                </button>
               </div>
             </div>
           </div>
