@@ -3,7 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt');
 const { authenticateToken } = require('../middleware/auth');
-const { sendEmail } = require('../utils/email');
+const { sendKeepsakeBookNotification, sendCircleNotesKeepsakeBookNotification } = require('../utils/email');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -565,6 +565,255 @@ router.post('/:eventId/join-circle', async (req, res) => {
     });
   } catch (error) {
     console.error('Join circle error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get all contributions for an event (organizer only)
+router.get('/:eventId/contributions', authenticateToken, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    // Verify event ownership
+    const event = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        organizerId: req.user.userId
+      }
+    });
+
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found or you do not have access to this event' });
+    }
+
+    // Get all contributions for this event
+    const contributions = await prisma.contribution.findMany({
+      where: { eventId },
+      include: {
+        recipient: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: [
+        { recipient: { name: 'asc' } },
+        { createdAt: 'asc' }
+      ]
+    });
+
+    // Group contributions by recipient for Circle Notes
+    const contributionsByRecipient = {};
+    
+    contributions.forEach(contribution => {
+      const recipientId = contribution.recipient.id;
+      if (!contributionsByRecipient[recipientId]) {
+        contributionsByRecipient[recipientId] = {
+          recipient: contribution.recipient,
+          contributions: []
+        };
+      }
+      contributionsByRecipient[recipientId].contributions.push({
+        id: contribution.id,
+        content: contribution.content,
+        contributorName: contribution.contributorName || 'Anonymous',
+        fontFamily: contribution.fontFamily,
+        backgroundColor: contribution.backgroundColor,
+        signature: contribution.signature,
+        images: contribution.images,
+        stickers: contribution.stickers,
+        drawings: contribution.drawings,
+        media: contribution.media,
+        formatting: contribution.formatting,
+        createdAt: contribution.createdAt
+      });
+    });
+
+    res.json({
+      event: {
+        id: event.id,
+        title: event.title,
+        eventType: event.eventType,
+        status: event.status
+      },
+      contributionsByRecipient: Object.values(contributionsByRecipient),
+      totalContributions: contributions.length
+    });
+  } catch (error) {
+    console.error('Get event contributions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete an event (organizer only)
+router.delete('/:eventId', authenticateToken, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    // Verify event ownership
+    const event = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        organizerId: req.user.userId
+      }
+    });
+
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found or you do not have access to this event' });
+    }
+
+    // Delete all related data in the correct order (due to foreign key constraints)
+    // 1. Delete contributions
+    await prisma.contribution.deleteMany({
+      where: { eventId }
+    });
+
+    // 2. Delete contributor sessions
+    await prisma.contributorSession.deleteMany({
+      where: { eventId }
+    });
+
+    // 3. Delete recipients
+    await prisma.recipient.deleteMany({
+      where: { eventId }
+    });
+
+    // 4. Delete the event itself
+    await prisma.event.delete({
+      where: { id: eventId }
+    });
+
+    res.json({ message: 'Event deleted successfully' });
+  } catch (error) {
+    console.error('Delete event error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Send out compiled keepsake books (end event)
+router.post('/:eventId/send-keepsake-books', authenticateToken, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    // Verify event ownership
+    const event = await prisma.event.findFirst({
+      where: {
+        id: eventId,
+        organizerId: req.user.userId
+      },
+      include: {
+        recipients: {
+          include: {
+            contributions: {
+              orderBy: { createdAt: 'asc' }
+            }
+          }
+        }
+      }
+    });
+
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found or you do not have access to this event' });
+    }
+
+    if (event.status === 'CLOSED') {
+      return res.status(400).json({ error: 'Event is already closed and keepsake books have been sent' });
+    }
+
+    // Check if there are any contributions
+    const totalContributions = event.recipients.reduce((sum, recipient) => sum + recipient.contributions.length, 0);
+    
+    if (totalContributions === 0) {
+      return res.status(400).json({ error: 'Cannot send keepsake books - no contributions have been submitted yet' });
+    }
+
+    // Send keepsake book notifications to recipients first
+    // Only close the event if ALL emails are sent successfully
+    let emailsSent = 0;
+    const emailResults = [];
+    const emailErrors = [];
+
+    for (const recipient of event.recipients) {
+      if (recipient.contributions.length > 0) {
+        try {
+          // Send keepsake book notification email using appropriate template
+          const emailResult = event.eventType === 'CIRCLE_NOTES'
+            ? await sendCircleNotesKeepsakeBookNotification(
+                recipient.email,
+                recipient.name,
+                event.title,
+                recipient.accessToken,
+                recipient.contributions.length
+              )
+            : await sendKeepsakeBookNotification(
+                recipient.email,
+                recipient.name,
+                event.title,
+                recipient.accessToken
+              );
+          
+          if (emailResult.success) {
+            emailResults.push({
+              recipient: recipient.name,
+              email: recipient.email,
+              contributionsCount: recipient.contributions.length,
+              status: 'sent',
+              messageId: emailResult.messageId
+            });
+            emailsSent++;
+          } else {
+            emailErrors.push({
+              recipient: recipient.name,
+              email: recipient.email,
+              error: emailResult.error,
+              status: 'failed'
+            });
+          }
+        } catch (error) {
+          console.error(`Failed to send email to ${recipient.email}:`, error);
+          emailErrors.push({
+            recipient: recipient.name,
+            email: recipient.email,
+            error: error.message,
+            status: 'failed'
+          });
+        }
+      } else {
+        // Skip recipients with no contributions
+        emailResults.push({
+          recipient: recipient.name,
+          email: recipient.email,
+          contributionsCount: 0,
+          status: 'skipped',
+          reason: 'No contributions received'
+        });
+      }
+    }
+
+    // Only close the event if all emails were sent successfully
+    let eventClosed = false;
+    if (emailErrors.length === 0 && emailsSent > 0) {
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { status: 'CLOSED' }
+      });
+      eventClosed = true;
+    }
+
+    res.json({
+      message: emailErrors.length > 0 
+        ? `${emailsSent} emails sent successfully, ${emailErrors.length} failed. Event remains open for retry.`
+        : 'Event ended successfully - all keepsake book emails sent!',
+      eventClosed,
+      emailsSent,
+      totalRecipients: event.recipients.length,
+      results: emailResults,
+      errors: emailErrors.length > 0 ? emailErrors : undefined
+    });
+  } catch (error) {
+    console.error('Send keepsake books error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
