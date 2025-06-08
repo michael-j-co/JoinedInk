@@ -215,6 +215,52 @@ export const EventDetailsPage: React.FC = () => {
     return new Date(deadline) < new Date();
   };
 
+  // Sanitize background color to prevent CSS injection
+  const sanitizeBackgroundColor = (backgroundColor: string | undefined) => {
+    // Whitelist of allowed background colors
+    const allowedColors = [
+      'transparent',
+      'clean',
+      '#ffffff',
+      '#f8f9fa',
+      '#f1f3f4',
+      '#e3f2fd',
+      '#f3e5f5',
+      '#e8f5e8',
+      '#fff3e0',
+      '#fce4ec',
+      '#e0f2f1',
+      '#e1f5fe',
+      '#f9fbe7',
+      '#fff8e1',
+      '#fefefe',
+      'white',
+      'ivory',
+      'beige',
+      'lavender',
+      'lightblue',
+      'lightgreen',
+      'lightyellow',
+      'lightpink',
+      'lightgray'
+    ];
+
+    if (!backgroundColor) {
+      return 'transparent';
+    }
+
+    // Convert to lowercase for comparison
+    const normalizedColor = backgroundColor.toLowerCase().trim();
+    
+    // Check if it's in our whitelist
+    if (allowedColors.includes(normalizedColor)) {
+      return normalizedColor === 'clean' ? 'transparent' : normalizedColor;
+    }
+
+    // Default to transparent if not in whitelist
+    return 'transparent';
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-cream to-neutral-ivory p-6">
@@ -618,7 +664,7 @@ export const EventDetailsPage: React.FC = () => {
                                     className="whitespace-pre-wrap text-text-primary"
                                     style={{ 
                                       fontFamily: contribution.fontFamily || 'Arial',
-                                      backgroundColor: contribution.backgroundColor === 'clean' ? 'transparent' : contribution.backgroundColor
+                                      backgroundColor: sanitizeBackgroundColor(contribution.backgroundColor)
                                     }}
                                   >
                                     {contribution.content}
