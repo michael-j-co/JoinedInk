@@ -11,6 +11,11 @@ interface Event {
   status: 'OPEN' | 'CLOSED';
   deadline: string;
   createdAt: string;
+  userRole: 'organizer' | 'participant';
+  organizer?: {
+    name: string;
+    email: string;
+  };
   recipients: {
     id: string;
     name: string;
@@ -31,6 +36,7 @@ export const DashboardPage: React.FC = () => {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showLinksModal, setShowLinksModal] = useState(false);
   const [contributorLinks, setContributorLinks] = useState<any>({});
+  const [copiedStates, setCopiedStates] = useState<{[key: string]: boolean}>({});
 
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -65,15 +71,36 @@ export const DashboardPage: React.FC = () => {
       const response = await axios.get(`/api/events/${event.id}/contributor-links`);
       setSelectedEvent(event);
       setContributorLinks(response.data.contributorLinks);
+      setCopiedStates({}); // Reset copied states when opening modal
       setShowLinksModal(true);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to get contributor links');
     }
   };
 
-  const copyToClipboard = (text: string) => {
+  const getParticipantContributorLink = async (event: Event) => {
+    try {
+      // For participants, we need to find their contributor session
+      const response = await axios.get(`/api/contributions/participant-session/${event.id}`);
+      if (response.data.contributorToken) {
+        const contributorUrl = `${window.location.origin}/contribute/${response.data.contributorToken}`;
+        window.open(contributorUrl, '_blank');
+      } else {
+        setError('Unable to find your participant link for this event');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to get your participant link');
+    }
+  };
+
+  const copyToClipboard = (text: string, buttonId: string) => {
     navigator.clipboard.writeText(text);
-    // You could add a toast notification here
+    setCopiedStates(prev => ({ ...prev, [buttonId]: true }));
+    
+    // Reset the copied state after 2 seconds
+    setTimeout(() => {
+      setCopiedStates(prev => ({ ...prev, [buttonId]: false }));
+    }, 2000);
   };
 
   const formatDate = (dateString: string) => {
@@ -99,6 +126,8 @@ export const DashboardPage: React.FC = () => {
   };
 
   // Calculate dashboard statistics
+  const createdEvents = events.filter(e => e.userRole === 'organizer');
+  const participatingEvents = events.filter(e => e.userRole === 'participant');
   const totalEvents = events.length;
   const activeEvents = events.filter(e => e.status === 'OPEN' && !isEventExpired(e.deadline)).length;
   const totalContributions = events.reduce((sum, event) => sum + event._count.contributions, 0);
@@ -148,8 +177,12 @@ export const DashboardPage: React.FC = () => {
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft">
-            <div className="text-2xl font-bold text-primary-600 mb-1">{totalEvents}</div>
-            <div className="text-text-secondary text-sm font-medium">Total Events</div>
+            <div className="text-2xl font-bold text-primary-600 mb-1">{events.filter(e => e.userRole === 'organizer').length}</div>
+            <div className="text-text-secondary text-sm font-medium">Created Events</div>
+          </div>
+          <div className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft">
+            <div className="text-2xl font-bold text-purple-600 mb-1">{events.filter(e => e.userRole === 'participant').length}</div>
+            <div className="text-text-secondary text-sm font-medium">Participating In</div>
           </div>
           <div className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft">
             <div className="text-2xl font-bold text-accent-sage mb-1">{activeEvents}</div>
@@ -159,16 +192,17 @@ export const DashboardPage: React.FC = () => {
             <div className="text-2xl font-bold text-accent-gold mb-1">{totalContributions}</div>
             <div className="text-text-secondary text-sm font-medium">Total Contributions</div>
           </div>
-          <div className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft">
-            <div className="text-2xl font-bold text-accent-rose mb-1">{completedEvents}</div>
-            <div className="text-text-secondary text-sm font-medium">Completed Events</div>
-          </div>
         </div>
 
         {/* Quick Actions */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-text-primary">Your Events</h2>
+            <div>
+              <h2 className="text-xl font-bold text-text-primary">Your Events</h2>
+              <p className="text-sm text-text-secondary mt-1">
+                Events you've created and Circle Notes you're participating in
+              </p>
+            </div>
             <Link
               to="/create-event"
               className="bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600 transition-colors shadow-warm font-medium"
@@ -213,6 +247,13 @@ export const DashboardPage: React.FC = () => {
                           {getEventTypeLabel(event.eventType)}
                         </span>
                         <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                          event.userRole === 'organizer'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-purple-100 text-purple-800'
+                        }`}>
+                          {event.userRole === 'organizer' ? 'Organizer' : 'Participant'}
+                        </span>
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                           event.status === 'OPEN' && !expired
                             ? 'bg-accent-sage bg-opacity-20 text-accent-sage'
                             : 'bg-neutral-warm text-text-tertiary'
@@ -223,6 +264,12 @@ export const DashboardPage: React.FC = () => {
                       
                       {event.description && (
                         <p className="text-text-secondary text-sm mb-3 line-clamp-2">{event.description}</p>
+                      )}
+                      
+                      {event.userRole === 'participant' && event.organizer && (
+                        <p className="text-text-secondary text-sm mb-3">
+                          <span className="font-medium">Organized by:</span> {event.organizer.name}
+                        </p>
                       )}
                       
                       <div className="flex items-center gap-6 text-sm text-text-secondary">
@@ -258,28 +305,50 @@ export const DashboardPage: React.FC = () => {
                     </div>
                     
                     <div className="flex items-center gap-2 ml-4">
-                      <button
-                        onClick={() => getContributorLinks(event)}
-                        className="px-3 py-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors text-sm font-medium"
-                      >
-                        Get Links
-                      </button>
-                      
-                      {event.status === 'OPEN' && !expired && (
-                        <button
-                          onClick={() => closeEvent(event.id)}
-                          className="px-3 py-2 text-accent-terracotta hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
-                        >
-                          Close Event
-                        </button>
+                      {event.userRole === 'organizer' ? (
+                        <>
+                          <button
+                            onClick={() => getContributorLinks(event)}
+                            className="px-3 py-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors text-sm font-medium"
+                          >
+                            Get Links
+                          </button>
+                          
+                          {event.status === 'OPEN' && !expired && (
+                            <button
+                              onClick={() => closeEvent(event.id)}
+                              className="px-3 py-2 text-accent-terracotta hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
+                            >
+                              Close Event
+                            </button>
+                          )}
+                          
+                          <Link
+                            to={`/event/${event.id}`}
+                            className="px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
+                          >
+                            View Details
+                          </Link>
+                        </>
+                      ) : (
+                        <>
+                          {event.status === 'OPEN' && !expired && (
+                            <button
+                              onClick={() => getParticipantContributorLink(event)}
+                              className="px-3 py-2 bg-accent-sage text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
+                            >
+                              Write Notes
+                            </button>
+                          )}
+                          
+                          <span className="px-3 py-2 text-text-tertiary text-sm">
+                            {event.status === 'OPEN' && !expired 
+                              ? 'Participating in this event'
+                              : 'Event completed'
+                            }
+                          </span>
+                        </>
                       )}
-                      
-                      <Link
-                        to={`/event/${event.id}`}
-                        className="px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
-                      >
-                        View Details
-                      </Link>
                     </div>
                   </div>
                 </div>
@@ -323,10 +392,10 @@ export const DashboardPage: React.FC = () => {
                         className="flex-1 px-3 py-2 bg-surface-paper border border-neutral-warm rounded text-sm text-text-primary"
                       />
                       <button
-                        onClick={() => copyToClipboard(contributorLinks.contributorUrl)}
+                        onClick={() => copyToClipboard(contributorLinks.contributorUrl, 'contributorUrl')}
                         className="px-4 py-2 bg-primary-500 text-white rounded text-sm hover:bg-primary-600 transition-colors"
                       >
-                        Copy
+                        {copiedStates.contributorUrl ? 'Copied!' : 'Copy'}
                       </button>
                     </div>
                   </div>
@@ -345,10 +414,10 @@ export const DashboardPage: React.FC = () => {
                           className="flex-1 px-3 py-2 bg-surface-paper border border-neutral-warm rounded text-sm text-text-primary"
                         />
                         <button
-                          onClick={() => copyToClipboard(contributorLinks.creatorContributorUrl)}
+                          onClick={() => copyToClipboard(contributorLinks.creatorContributorUrl, 'creatorContributorUrl')}
                           className="px-4 py-2 bg-primary-500 text-white rounded text-sm hover:bg-primary-600 transition-colors"
                         >
-                          Copy
+                          {copiedStates.creatorContributorUrl ? 'Copied!' : 'Copy'}
                         </button>
                         <a
                           href={contributorLinks.creatorContributorUrl}
@@ -374,10 +443,10 @@ export const DashboardPage: React.FC = () => {
                           className="flex-1 px-3 py-2 bg-surface-paper border border-neutral-warm rounded text-sm text-text-primary"
                         />
                         <button
-                          onClick={() => copyToClipboard(contributorLinks.joinLink)}
+                          onClick={() => copyToClipboard(contributorLinks.joinLink, 'joinLink')}
                           className="px-4 py-2 bg-primary-500 text-white rounded text-sm hover:bg-primary-600 transition-colors"
                         >
-                          Copy
+                          {copiedStates.joinLink ? 'Copied!' : 'Copy'}
                         </button>
                       </div>
                     </div>

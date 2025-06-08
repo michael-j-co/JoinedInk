@@ -2,6 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
 const path = require('path');
+const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -103,8 +104,55 @@ router.get('/session/:token', async (req, res) => {
   }
 });
 
+// Get participant's contributor session for an event (authenticated)
+router.get('/participant-session/:eventId', authenticateToken, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const userId = req.user.userId;
+
+    // Find the contributor session for this user and event
+    const contributorSession = await prisma.contributorSession.findFirst({
+      where: {
+        eventId,
+        userId
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            eventType: true,
+            status: true,
+            deadline: true
+          }
+        }
+      }
+    });
+
+    if (!contributorSession) {
+      return res.status(404).json({ error: 'You are not a participant in this event' });
+    }
+
+    if (contributorSession.event.status === 'CLOSED') {
+      return res.status(410).json({ error: 'This event has been closed' });
+    }
+
+    if (new Date() > contributorSession.expiresAt) {
+      return res.status(410).json({ error: 'This event has expired' });
+    }
+
+    res.json({
+      contributorToken: contributorSession.token,
+      event: contributorSession.event
+    });
+  } catch (error) {
+    console.error('Get participant session error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Submit contribution
-router.post('/submit', upload.array('images', 5), async (req, res) => {
+router.post('/submit', upload.array('images', 10), async (req, res) => {
   try {
     const {
       contributorToken,
@@ -114,8 +162,10 @@ router.post('/submit', upload.array('images', 5), async (req, res) => {
       fontFamily,
       backgroundColor,
       signature,
-      stickers,
-      drawings
+      media,
+      drawings,
+      formatting,
+      stickers // Legacy field for backward compatibility
     } = req.body;
 
     // Validate session
@@ -163,21 +213,95 @@ router.post('/submit', upload.array('images', 5), async (req, res) => {
       return res.status(400).json({ error: 'You have already submitted a note for this recipient' });
     }
 
-    // Process uploaded images
-    const imageUrls = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
+    // Process uploaded images and create URLs mapping
+    const uploadedImageUrls = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
+    
+    // Parse media items and update URLs for uploaded images
+    let mediaItems = [];
+    if (media) {
+      try {
+        mediaItems = JSON.parse(media);
+        // Replace blob URLs with actual upload URLs for images
+        let uploadIndex = 0;
+        mediaItems = mediaItems.map(item => {
+          if (item.type === 'image' && item.url.startsWith('blob:')) {
+            if (uploadIndex < uploadedImageUrls.length) {
+              return { ...item, url: uploadedImageUrls[uploadIndex++] };
+            }
+          }
+          return item;
+        });
+      } catch (error) {
+        console.error('Error parsing media:', error);
+        mediaItems = [];
+      }
+    }
 
-    // Create contribution
+    // Parse signature data
+    let signatureData = null;
+    if (signature) {
+      try {
+        signatureData = JSON.parse(signature);
+      } catch (error) {
+        console.error('Error parsing signature:', error);
+        // Fallback to treating as string for backward compatibility
+        signatureData = signature;
+      }
+    }
+
+    // Parse drawings data
+    let drawingsData = null;
+    if (drawings) {
+      try {
+        drawingsData = JSON.parse(drawings);
+      } catch (error) {
+        console.error('Error parsing drawings:', error);
+        drawingsData = drawings;
+      }
+    }
+
+    // Parse formatting data
+    let formattingData = null;
+    if (formatting) {
+      try {
+        formattingData = JSON.parse(formatting);
+      } catch (error) {
+        console.error('Error parsing formatting:', error);
+        // Fallback to basic formatting
+        formattingData = {
+          fontFamily: fontFamily || 'Arial',
+          fontSize: '16px',
+          bold: false,
+          italic: false
+        };
+      }
+    }
+
+    // Parse legacy stickers for backward compatibility
+    let stickersData = [];
+    if (stickers) {
+      try {
+        stickersData = Array.isArray(stickers) ? stickers : JSON.parse(stickers);
+      } catch (error) {
+        console.error('Error parsing stickers:', error);
+        stickersData = [];
+      }
+    }
+
+    // Create contribution with comprehensive data structure
     const contribution = await prisma.contribution.create({
       data: {
         content: content || '',
-        contributorName,
+        contributorName: contributorName || null,
         contributorToken,
-        fontFamily,
-        backgroundColor,
-        signature,
-        images: imageUrls,
-        stickers: stickers ? JSON.parse(stickers) : [],
-        drawings,
+        fontFamily: formattingData?.fontFamily || fontFamily || 'Arial',
+        backgroundColor: backgroundColor || 'clean',
+        signature: signatureData,
+        images: uploadedImageUrls, // Legacy field for uploaded images
+        stickers: stickersData, // Legacy field for backward compatibility
+        media: mediaItems, // New comprehensive media field
+        drawings: drawingsData,
+        formatting: formattingData,
         eventId: session.eventId,
         recipientId
       }
