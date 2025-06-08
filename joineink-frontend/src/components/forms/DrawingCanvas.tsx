@@ -95,7 +95,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onSave, onClose })
       id: Date.now().toString(),
       dataUrl,
       width: canvas.width,
-      height: canvas.height
+      height: canvas.height,
+      position: { x: 20, y: 20, zIndex: 1 } // Default position for new drawings
     };
 
     onSave(drawingData);

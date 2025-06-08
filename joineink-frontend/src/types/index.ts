@@ -6,6 +6,11 @@ export interface MediaItem {
   alt?: string;
   width?: number;
   height?: number;
+  position?: {
+    x: number;
+    y: number;
+    zIndex?: number;
+  };
 }
 
 export interface DrawingData {
@@ -13,6 +18,11 @@ export interface DrawingData {
   dataUrl: string;
   width: number;
   height: number;
+  position?: {
+    x: number;
+    y: number;
+    zIndex?: number;
+  };
 }
 
 export interface SignatureData {

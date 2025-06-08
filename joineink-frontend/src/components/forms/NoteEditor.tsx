@@ -16,13 +16,15 @@ import { StickerPicker } from './StickerPicker';
 import { DrawingCanvas } from './DrawingCanvas';
 import { BackgroundSelector } from './BackgroundSelector';
 import { NotePreview } from './NotePreview';
+import { generateNonOverlappingPosition } from '../../utils/positioning';
 
 interface NoteEditorProps {
   recipientName: string;
   eventTitle: string;
-  initialContent?: Partial<NoteContent>;
+  initialContent?: Partial<NoteContent> | NoteContent;
   onSave: (content: NoteContent) => void;
   onPreview: (content: NoteContent) => void;
+  onContentChange?: (content: NoteContent) => void;
   isSubmitting?: boolean;
 }
 
@@ -50,6 +52,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   initialContent,
   onSave,
   onPreview,
+  onContentChange,
   isSubmitting = false
 }) => {
   const [content, setContent] = useState<NoteContent>({
@@ -79,42 +82,91 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [signatureMode, setSignatureMode] = useState<'draw' | 'type'>('draw');
   const [typedSignature, setTypedSignature] = useState('');
   const [signatureFont, setSignatureFont] = useState('Dancing Script, cursive');
+  const [previewWidth, setPreviewWidth] = useState(50); // Percentage width for preview
+  const [isLargeScreen, setIsLargeScreen] = useState(typeof window !== 'undefined' && window.innerWidth >= 1024);
 
   const signatureCanvasRef = useRef<SignatureCanvas>(null);
   const richTextEditorRef = useRef<HTMLDivElement>(null);
+  const isTypingRef = useRef<boolean>(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDraggingDivider = useRef<boolean>(false);
 
   // Initialize rich text editor content
   useEffect(() => {
-    if (richTextEditorRef.current && initialContent?.text) {
+    if (richTextEditorRef.current && initialContent?.text && richTextEditorRef.current.innerHTML !== initialContent.text && !isTypingRef.current) {
+      // Only update if the content is actually different and user is not currently typing
       richTextEditorRef.current.innerHTML = initialContent.text;
     }
   }, [initialContent]);
 
-  // Calculate word and character counts from HTML content
+  // Calculate word and character counts from HTML content (debounced to avoid interfering with typing)
   useEffect(() => {
-    // Strip HTML tags to get plain text for counting
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = content.text || '';
-    const textContent = tempDiv.textContent || tempDiv.innerText || '';
-    
-    const words = textContent.trim().split(/\s+/).filter(word => word.length > 0);
-    const charCount = textContent.length;
-    
-    setContent(prev => ({
-      ...prev,
-      wordCount: words.length,
-      characterCount: charCount
-    }));
+    const timer = setTimeout(() => {
+      // Strip HTML tags to get plain text for counting
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = content.text || '';
+      const textContent = tempDiv.textContent || tempDiv.innerText || '';
+      
+      const words = textContent.trim().split(/\s+/).filter(word => word.length > 0);
+      const charCount = textContent.length;
+      
+      setContent(prev => ({
+        ...prev,
+        wordCount: words.length,
+        characterCount: charCount
+      }));
+    }, 100); // Short debounce to avoid interfering with typing
+
+    return () => clearTimeout(timer);
   }, [content.text]);
+
+  // Notify parent component of content changes (debounced to avoid interfering with typing)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onContentChange?.(content);
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [content, onContentChange]);
 
   // Handle text change for rich text editor
   const handleTextChange = useCallback((e: React.FormEvent<HTMLDivElement>) => {
+    isTypingRef.current = true;
     const htmlContent = e.currentTarget.innerHTML;
     
-    setContent(prev => ({
-      ...prev,
-      text: htmlContent
-    }));
+    // Only update if content actually changed to avoid unnecessary re-renders
+    setContent(prev => {
+      if (prev.text === htmlContent) {
+        return prev;
+      }
+      return {
+        ...prev,
+        text: htmlContent
+      };
+    });
+
+    // Reset typing flag after a short delay
+    setTimeout(() => {
+      isTypingRef.current = false;
+    }, 100);
+  }, []);
+
+  // Handle focus to ensure proper cursor behavior
+  const handleFocus = useCallback(() => {
+    if (richTextEditorRef.current) {
+      // Ensure cursor is positioned correctly on focus
+      const range = document.createRange();
+      const selection = window.getSelection();
+      if (selection && richTextEditorRef.current.childNodes.length > 0) {
+        // Position cursor at the end of content if no selection exists
+        if (selection.rangeCount === 0) {
+          range.selectNodeContents(richTextEditorRef.current);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
+    }
   }, []);
 
   // Handle contributor name change
@@ -182,19 +234,26 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   // Handle media uploads
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    acceptedFiles.forEach(file => {
+    acceptedFiles.forEach((file, index) => {
       const reader = new FileReader();
       reader.onload = () => {
-        const mediaItem: MediaItem = {
-          id: Date.now().toString(),
-          type: 'image',
-          url: reader.result as string,
-          alt: file.name
-        };
-        setContent(prev => ({
-          ...prev,
-          media: [...prev.media, mediaItem]
-        }));
+        setContent(prev => {
+          const allItems = [...prev.media, ...prev.drawings];
+          const position = generateNonOverlappingPosition(allItems);
+          
+          const mediaItem: MediaItem = {
+            id: Date.now().toString() + index,
+            type: 'image',
+            url: reader.result as string,
+            alt: file.name,
+            position
+          };
+          
+          return {
+            ...prev,
+            media: [...prev.media, mediaItem]
+          };
+        });
       };
       reader.readAsDataURL(file);
     });
@@ -210,40 +269,64 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   // Handle GIF selection
   const handleGifSelect = useCallback((gif: any) => {
-    const mediaItem: MediaItem = {
-      id: gif.id,
-      type: 'gif',
-      url: gif.images.fixed_height.url,
-      alt: gif.title
-    };
-    setContent(prev => ({
-      ...prev,
-      media: [...prev.media, mediaItem]
-    }));
+    setContent(prev => {
+      const allItems = [...prev.media, ...prev.drawings];
+      const position = generateNonOverlappingPosition(allItems);
+      
+      const mediaItem: MediaItem = {
+        id: gif.id,
+        type: 'gif',
+        url: gif.images.fixed_height.url,
+        alt: gif.title,
+        position
+      };
+      
+      return {
+        ...prev,
+        media: [...prev.media, mediaItem]
+      };
+    });
     setShowGifPicker(false);
   }, []);
 
   // Handle sticker selection
   const handleStickerSelect = useCallback((sticker: any) => {
-    const mediaItem: MediaItem = {
-      id: sticker.id,
-      type: 'sticker',
-      url: sticker.url,
-      alt: sticker.alt
-    };
-    setContent(prev => ({
-      ...prev,
-      media: [...prev.media, mediaItem]
-    }));
+    setContent(prev => {
+      const allItems = [...prev.media, ...prev.drawings];
+      const position = generateNonOverlappingPosition(allItems);
+      
+      const mediaItem: MediaItem = {
+        id: sticker.id,
+        type: 'sticker',
+        url: sticker.url,
+        alt: sticker.alt,
+        position
+      };
+      
+      return {
+        ...prev,
+        media: [...prev.media, mediaItem]
+      };
+    });
     setShowStickerPicker(false);
   }, []);
 
   // Handle drawing save
   const handleDrawingSave = useCallback((drawingData: DrawingData) => {
-    setContent(prev => ({
-      ...prev,
-      drawings: [...prev.drawings, drawingData]
-    }));
+    setContent(prev => {
+      const allItems = [...prev.media, ...prev.drawings];
+      const position = generateNonOverlappingPosition(allItems);
+      
+      const drawingWithPosition: DrawingData = {
+        ...drawingData,
+        position
+      };
+      
+      return {
+        ...prev,
+        drawings: [...prev.drawings, drawingWithPosition]
+      };
+    });
     setShowDrawingCanvas(false);
   }, []);
 
@@ -285,6 +368,30 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }));
   }, []);
 
+  // Handle media position change
+  const handleMediaPositionChange = useCallback((itemId: string, position: { x: number; y: number }) => {
+    setContent(prev => ({
+      ...prev,
+      media: prev.media.map(item => 
+        item.id === itemId 
+          ? { ...item, position: { ...position, zIndex: 1 } }
+          : item
+      )
+    }));
+  }, []);
+
+  // Handle drawing position change
+  const handleDrawingPositionChange = useCallback((drawingId: string, position: { x: number; y: number }) => {
+    setContent(prev => ({
+      ...prev,
+      drawings: prev.drawings.map(drawing => 
+        drawing.id === drawingId 
+          ? { ...drawing, position: { ...position, zIndex: 1 } }
+          : drawing
+      )
+    }));
+  }, []);
+
   // Remove drawing
   const removeDrawing = useCallback((id: string) => {
     setContent(prev => ({
@@ -315,6 +422,42 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   const currentTheme = BACKGROUND_THEMES.find(theme => theme.id === content.backgroundColor) || BACKGROUND_THEMES[0];
+
+  // Handle divider dragging for resizable preview
+  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    isDraggingDivider.current = true;
+    e.preventDefault();
+    
+    // Add event listeners immediately when drag starts
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingDivider.current || !containerRef.current) return;
+
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const relativeX = e.clientX - containerRect.left;
+      const newPreviewWidth = Math.max(25, Math.min(75, 100 - (relativeX / containerRect.width) * 100));
+      
+      setPreviewWidth(newPreviewWidth);
+    };
+
+    const handleMouseUp = () => {
+      isDraggingDivider.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, []);
+
+  // Handle window resize for responsive layout
+  useEffect(() => {
+    const handleResize = () => {
+      setIsLargeScreen(window.innerWidth >= 1024);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -351,9 +494,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         </nav>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div ref={containerRef} className="flex flex-col lg:flex-row gap-4 relative">
         {/* Editor Panel */}
-        <div className="space-y-6">
+        <div className="space-y-6 lg:min-w-0" style={{ width: isLargeScreen ? `${100 - previewWidth}%` : '100%' }}>
           {activeTab === 'write' && (
             <div className="space-y-4">
               {/* Contributor Name */}
@@ -430,9 +573,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                   contentEditable
                   onInput={handleTextChange}
                   onKeyDown={handleKeyDown}
+                  onFocus={handleFocus}
                   className="w-full min-h-[300px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 resize-none"
                   style={{
                     fontFamily: content.formatting.fontFamily,
+                    direction: 'ltr',
+                    textAlign: 'left'
                   }}
                   data-placeholder="Write your heartfelt message here..."
                   suppressContentEditableWarning={true}
@@ -675,14 +821,33 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           )}
         </div>
 
+        {/* Resizable Divider - Only on desktop */}
+        <div 
+          className="hidden lg:flex w-2 bg-gray-300 hover:bg-rose-400 cursor-col-resize transition-colors flex-shrink-0 items-center justify-center group"
+          onMouseDown={handleDividerMouseDown}
+        >
+          <div className="w-0.5 h-8 bg-gray-400 group-hover:bg-white transition-colors"></div>
+        </div>
+
         {/* Preview Panel */}
-        <div className="lg:sticky lg:top-6">
+        <div className="lg:sticky lg:top-6 lg:min-w-0" style={{ width: isLargeScreen ? `${previewWidth}%` : '100%' }}>
           <div className="border border-gray-200 rounded-lg overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
               <h3 className="text-sm font-medium text-gray-900">Live Preview</h3>
+              {(content.media.length > 0 || content.drawings.length > 0) && (
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 You can drag and drop images, stickers, and drawings to move them around
+                </p>
+              )}
             </div>
             <div className="h-96 overflow-y-auto">
-              <NotePreview content={content} theme={currentTheme} />
+              <NotePreview 
+                content={content} 
+                theme={currentTheme}
+                onMediaPositionChange={handleMediaPositionChange}
+                onDrawingPositionChange={handleDrawingPositionChange}
+                isInteractive={true}
+              />
             </div>
           </div>
         </div>
