@@ -159,6 +159,36 @@ router.post('/', authenticateToken, async (req, res) => {
           completedRecipients: [] // Will track which people this person has written for
         }
       });
+
+      // Automatically add the creator as a participant in the circle notes
+      const creatorUser = await prisma.user.findUnique({
+        where: { id: req.user.userId }
+      });
+
+      if (creatorUser) {
+        // Create recipient for the creator
+        const creatorRecipient = await prisma.recipient.create({
+          data: {
+            name: creatorUser.name,
+            email: creatorUser.email,
+            accessToken: uuidv4(),
+            userId: creatorUser.id,
+            eventId: event.id
+          }
+        });
+
+        // Create a contributor session for the creator
+        const creatorContributorToken = uuidv4();
+        await prisma.contributorSession.create({
+          data: {
+            token: creatorContributorToken,
+            eventId: event.id,
+            userId: creatorUser.id,
+            expiresAt: deadlineDate,
+            completedRecipients: []
+          }
+        });
+      }
       
       responseData = {
         id: event.id,
@@ -289,9 +319,16 @@ router.get('/:eventId/contributor-links', authenticateToken, async (req, res) =>
         contributorLinks.contributorUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/contribute/${contributorSessions[0].token}`;
       }
     } else if (event.eventType === 'CIRCLE_NOTES') {
-      // For Circle Notes, return the join link
-      if (contributorSessions.length > 0) {
-        contributorLinks.joinLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/join-circle/${contributorSessions[0].token}`;
+      // For Circle Notes, return both the join link and creator's contributor link
+      const joinTokenSession = contributorSessions.find(session => !session.userId);
+      const creatorSession = contributorSessions.find(session => session.userId === req.user.userId);
+      
+      if (joinTokenSession) {
+        contributorLinks.joinLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/join-circle/${joinTokenSession.token}`;
+      }
+      
+      if (creatorSession) {
+        contributorLinks.creatorContributorUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/contribute/${creatorSession.token}`;
       }
     }
 

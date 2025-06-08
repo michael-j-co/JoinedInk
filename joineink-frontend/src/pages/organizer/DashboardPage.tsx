@@ -331,24 +331,55 @@ export const DashboardPage: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-neutral-ivory p-4 rounded-lg">
-                    <h4 className="font-medium text-text-primary mb-2">Circle Notes Join Link</h4>
-                    <p className="text-sm text-text-secondary mb-3">
-                      Share this link with your group:
-                    </p>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={contributorLinks.joinLink || 'Loading...'}
-                        readOnly
-                        className="flex-1 px-3 py-2 bg-surface-paper border border-neutral-warm rounded text-sm text-text-primary"
-                      />
-                      <button
-                        onClick={() => copyToClipboard(contributorLinks.joinLink)}
-                        className="px-4 py-2 bg-primary-500 text-white rounded text-sm hover:bg-primary-600 transition-colors"
-                      >
-                        Copy
-                      </button>
+                  <div className="space-y-4">
+                    <div className="bg-neutral-ivory p-4 rounded-lg">
+                      <h4 className="font-medium text-text-primary mb-2">Your Contribution Link</h4>
+                      <p className="text-sm text-text-secondary mb-3">
+                        Click this link to write notes to other participants:
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={contributorLinks.creatorContributorUrl || 'Loading...'}
+                          readOnly
+                          className="flex-1 px-3 py-2 bg-surface-paper border border-neutral-warm rounded text-sm text-text-primary"
+                        />
+                        <button
+                          onClick={() => copyToClipboard(contributorLinks.creatorContributorUrl)}
+                          className="px-4 py-2 bg-primary-500 text-white rounded text-sm hover:bg-primary-600 transition-colors"
+                        >
+                          Copy
+                        </button>
+                        <a
+                          href={contributorLinks.creatorContributorUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-accent-sage text-white rounded text-sm hover:bg-green-600 transition-colors"
+                        >
+                          Open
+                        </a>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-neutral-ivory p-4 rounded-lg">
+                      <h4 className="font-medium text-text-primary mb-2">Circle Notes Join Link</h4>
+                      <p className="text-sm text-text-secondary mb-3">
+                        Share this link with your group:
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={contributorLinks.joinLink || 'Loading...'}
+                          readOnly
+                          className="flex-1 px-3 py-2 bg-surface-paper border border-neutral-warm rounded text-sm text-text-primary"
+                        />
+                        <button
+                          onClick={() => copyToClipboard(contributorLinks.joinLink)}
+                          className="px-4 py-2 bg-primary-500 text-white rounded text-sm hover:bg-primary-600 transition-colors"
+                        >
+                          Copy
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
