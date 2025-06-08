@@ -8,8 +8,16 @@ interface GifPickerProps {
   onClose: () => void;
 }
 
-// Initialize Giphy API - In production, this should come from environment variables
-const gf = new GiphyFetch('your-giphy-api-key');
+// Initialize Giphy API with API key from environment variables
+const GIPHY_API_KEY = process.env.REACT_APP_GIPHY_API_KEY;
+
+if (!GIPHY_API_KEY) {
+  console.warn('REACT_APP_GIPHY_API_KEY not found in environment variables. Please create .env file with your API key.');
+  console.log('Current environment variables:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP_')));
+}
+
+// Temporary fallback while setting up environment variables
+const gf = new GiphyFetch(GIPHY_API_KEY || 'JS3p0tCqIKKtM8QmZ8HBa2gBszG1mAiS');
 
 export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,27 +30,71 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
     loadTrendingGifs();
   }, []);
 
+  // Debounced search when search term changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchTerm.trim()) {
+        searchGifs(searchTerm);
+      } else {
+        loadTrendingGifs();
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+
   const loadTrendingGifs = async () => {
     try {
       setLoading(true);
       setError(null);
-      // For demo purposes, we'll use placeholder GIFs
-      // In production, you would uncomment the Giphy API call below
-      // const { data } = await gf.trending({ limit: 20 });
-      // setGifs(data);
       
-      // Demo GIFs for development
-      const demoGifs = [
+      // Try Giphy SDK first
+      try {
+        const { data } = await gf.trending({ limit: 20 });
+        setGifs(data);
+        return;
+      } catch (sdkError) {
+        console.warn('Giphy SDK failed, trying direct API call:', sdkError);
+        
+        // Fallback to direct API call with proper URL encoding
+        const apiKey = GIPHY_API_KEY || 'JS3p0tCqIKKtM8QmZ8HBa2gBszG1mAiS';
+        const response = await fetch(`https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(apiKey)}&limit=20&rating=g`);
+        
+        if (!response.ok) {
+          if (response.status === 429) {
+            throw new Error('Rate limit exceeded. Please try again later.');
+          } else if (response.status === 403) {
+            throw new Error('API key is invalid or expired.');
+          } else {
+            throw new Error(`API error: ${response.status}`);
+          }
+        }
+        
+        const result = await response.json();
+        setGifs(result.data || []);
+        return;
+      }
+    } catch (err: any) {
+      console.error('Error loading trending GIFs:', err);
+      
+      // Set specific error message
+      if (err.message.includes('Rate limit')) {
+        setError('Rate limit exceeded. Please try again later.');
+      } else if (err.message.includes('API key')) {
+        setError('API key issue. Please check your configuration.');
+      } else if (err.message.includes('Failed to fetch')) {
+        setError('Network error. Please check your internet connection.');
+      } else {
+        setError('Failed to load trending GIFs. Using demo content instead.');
+      }
+      
+      // Fallback to demo GIFs
+      const fallbackGifs = [
         {
-          id: 'demo1',
+          id: 'fallback1',
           title: 'Happy',
           images: {
             fixed_height: {
-              url: 'https://media.giphy.com/media/3oz8xLd9DJq2l2VFtu/giphy.gif',
-              width: '320',
-              height: '180'
-            },
-            fixed_width: {
               url: 'https://media.giphy.com/media/3oz8xLd9DJq2l2VFtu/giphy.gif',
               width: '320',
               height: '180'
@@ -50,26 +102,40 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
           }
         },
         {
-          id: 'demo2',
+          id: 'fallback2',
           title: 'Celebration',
           images: {
             fixed_height: {
               url: 'https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif',
               width: '320',
               height: '180'
-            },
-            fixed_width: {
-              url: 'https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif',
+            }
+          }
+        },
+        {
+          id: 'fallback3',
+          title: 'Excited',
+          images: {
+            fixed_height: {
+              url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
+              width: '320',
+              height: '180'
+            }
+          }
+        },
+        {
+          id: 'fallback4',
+          title: 'Dancing',
+          images: {
+            fixed_height: {
+              url: 'https://media.giphy.com/media/13HgwGsXF0aiGY/giphy.gif',
               width: '320',
               height: '180'
             }
           }
         }
       ];
-      setGifs(demoGifs);
-    } catch (err) {
-      setError('Failed to load trending GIFs');
-      console.error('Error loading trending GIFs:', err);
+      setGifs(fallbackGifs);
     } finally {
       setLoading(false);
     }
@@ -84,23 +150,55 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
     try {
       setLoading(true);
       setError(null);
-      // For demo purposes, we'll filter demo GIFs
-      // In production, you would uncomment the Giphy API call below
-      // const { data } = await gf.search(query, { limit: 20 });
-      // setGifs(data);
       
-      // Demo search results
-      const demoResults = [
+      // Try Giphy SDK first
+      try {
+        const { data } = await gf.search(query, { limit: 20 });
+        setGifs(data);
+        return;
+      } catch (sdkError) {
+        console.warn('Giphy SDK search failed, trying direct API call:', sdkError);
+        
+        // Fallback to direct API call with proper URL encoding (as per Giphy docs)
+        const apiKey = GIPHY_API_KEY || 'JS3p0tCqIKKtM8QmZ8HBa2gBszG1mAiS';
+        const encodedQuery = encodeURIComponent(query);
+        const response = await fetch(`https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(apiKey)}&q=${encodedQuery}&limit=20&rating=g`);
+        
+        if (!response.ok) {
+          if (response.status === 429) {
+            throw new Error('Rate limit exceeded. Please try again later.');
+          } else if (response.status === 403) {
+            throw new Error('API key is invalid or expired.');
+          } else {
+            throw new Error(`API error: ${response.status}`);
+          }
+        }
+        
+        const result = await response.json();
+        setGifs(result.data || []);
+        return;
+      }
+    } catch (err: any) {
+      console.error('Error searching GIFs:', err);
+      
+      // Set specific error message
+      if (err.message.includes('Rate limit')) {
+        setError('Rate limit exceeded. Please try again later.');
+      } else if (err.message.includes('API key')) {
+        setError('API key issue. Please check your configuration.');
+      } else if (err.message.includes('Failed to fetch')) {
+        setError('Network error. Please check your internet connection.');
+      } else {
+        setError('Failed to search GIFs. Showing demo results instead.');
+      }
+      
+      // Fallback to demo search results based on query
+      const demoSearchResults = [
         {
-          id: 'search1',
-          title: `${query} result 1`,
+          id: `search-${query}-1`,
+          title: `${query} demo result`,
           images: {
             fixed_height: {
-              url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
-              width: '320',
-              height: '180'
-            },
-            fixed_width: {
               url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
               width: '320',
               height: '180'
@@ -108,10 +206,7 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
           }
         }
       ];
-      setGifs(demoResults);
-    } catch (err) {
-      setError('Failed to search GIFs');
-      console.error('Error searching GIFs:', err);
+      setGifs(demoSearchResults);
     } finally {
       setLoading(false);
     }
@@ -158,15 +253,26 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
             </div>
           )}
 
-          {error && (
+          {error && gifs.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-red-600">{error}</p>
+              <p className="text-red-600 mb-2">{error}</p>
+              <p className="text-sm text-gray-500 mb-4">
+                Please check your internet connection or try again later.
+              </p>
               <button
-                onClick={loadTrendingGifs}
-                className="mt-2 text-rose-600 hover:text-rose-800"
+                onClick={() => searchTerm ? searchGifs(searchTerm) : loadTrendingGifs()}
+                className="px-4 py-2 bg-rose-500 text-white rounded-md hover:bg-rose-600 transition-colors"
               >
                 Try again
               </button>
+            </div>
+          )}
+
+          {error && gifs.length > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
+              <p className="text-yellow-800 text-sm">
+                ⚠️ {error} Showing demo content instead.
+              </p>
             </div>
           )}
 

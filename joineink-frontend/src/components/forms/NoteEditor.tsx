@@ -99,6 +99,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
   }, [initialContent]);
 
+  // Sync rich text editor with current content state (for tab switching)
+  useEffect(() => {
+    if (richTextEditorRef.current && content.text !== undefined && richTextEditorRef.current.innerHTML !== content.text && !isTypingRef.current) {
+      // Update editor content when internal state changes (e.g., when switching back to write tab)
+      richTextEditorRef.current.innerHTML = content.text;
+    }
+  }, [content.text, activeTab]); // Include activeTab to trigger sync when switching back to write tab
+
   // Calculate word and character counts from HTML content (debounced to avoid interfering with typing)
   useEffect(() => {
     const timer = setTimeout(() => {
