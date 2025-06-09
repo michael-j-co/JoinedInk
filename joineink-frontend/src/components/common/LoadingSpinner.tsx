@@ -403,6 +403,34 @@ export const SuccessAnimation: React.FC<{
   message = "Success!", 
   size = 'md' 
 }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [containerDimensions, setContainerDimensions] = React.useState({ width: 0, height: 0 });
+
+  // Get size-based dimensions for the icon and particles
+  const sizeConfig = React.useMemo(() => {
+    switch (size) {
+      case 'sm':
+        return { iconSize: 12, particleRadius: 40, containerPadding: 4 };
+      case 'lg':
+        return { iconSize: 20, particleRadius: 80, containerPadding: 8 };
+      default: // 'md'
+        return { iconSize: 16, particleRadius: 60, containerPadding: 6 };
+    }
+  }, [size]);
+
+  // Calculate dynamic center position
+  const centerPosition = React.useMemo(() => {
+    if (containerDimensions.width === 0 || containerDimensions.height === 0) {
+      // Fallback to approximate center based on size config
+      const approxSize = sizeConfig.iconSize * 4 + sizeConfig.containerPadding * 16; // rough estimate
+      return { x: approxSize / 2, y: approxSize / 2 };
+    }
+    return {
+      x: containerDimensions.width / 2,
+      y: containerDimensions.height / 2
+    };
+  }, [containerDimensions, sizeConfig]);
+
   React.useEffect(() => {
     if (isVisible && onComplete) {
       const timer = setTimeout(onComplete, 2000);
@@ -410,7 +438,33 @@ export const SuccessAnimation: React.FC<{
     }
   }, [isVisible, onComplete]);
 
+  React.useEffect(() => {
+    if (isVisible && containerRef.current) {
+      const updateDimensions = () => {
+        if (containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          setContainerDimensions({ width: rect.width, height: rect.height });
+        }
+      };
+
+      // Initial measurement
+      updateDimensions();
+
+      // Add resize observer for dynamic updates
+      const resizeObserver = new ResizeObserver(updateDimensions);
+      resizeObserver.observe(containerRef.current);
+
+      return () => {
+        resizeObserver.disconnect();
+      };
+    }
+  }, [isVisible]);
+
   if (!isVisible) return null;
+
+  const iconSizeClass = size === 'sm' ? 'w-12 h-12' : size === 'lg' ? 'w-20 h-20' : 'w-16 h-16';
+  const iconInnerSizeClass = size === 'sm' ? 'w-6 h-6' : size === 'lg' ? 'w-10 h-10' : 'w-8 h-8';
+  const paddingClass = size === 'sm' ? 'p-4' : size === 'lg' ? 'p-8' : 'p-6';
 
   return (
     <motion.div
@@ -420,21 +474,24 @@ export const SuccessAnimation: React.FC<{
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
       className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
     >
-      <div className="bg-surface-paper rounded-xl p-6 shadow-2xl border border-surface-border">
+      <div 
+        ref={containerRef}
+        className={`bg-surface-paper rounded-xl ${paddingClass} shadow-2xl border border-surface-border relative`}
+      >
         <div className="text-center">
           {/* Celebratory animation */}
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            className="w-16 h-16 bg-gradient-to-r from-accent-sage to-green-500 rounded-full flex items-center justify-center mx-auto mb-4"
+            className={`${iconSizeClass} bg-gradient-to-r from-accent-sage to-green-500 rounded-full flex items-center justify-center mx-auto mb-4`}
           >
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.5, type: "spring", stiffness: 400 }}
             >
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`${iconInnerSizeClass} text-white`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
               </svg>
             </motion.div>
@@ -445,7 +502,7 @@ export const SuccessAnimation: React.FC<{
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7 }}
-            className="text-text-primary font-medium"
+            className={`text-text-primary font-medium ${size === 'sm' ? 'text-sm' : size === 'lg' ? 'text-lg' : 'text-base'}`}
           >
             {message}
           </motion.p>
@@ -455,16 +512,18 @@ export const SuccessAnimation: React.FC<{
             {[...Array(8)].map((_, i) => (
               <motion.div
                 key={i}
-                className="absolute w-2 h-2 bg-accent-sage rounded-full"
+                className={`absolute bg-accent-sage rounded-full ${
+                  size === 'sm' ? 'w-1.5 h-1.5' : size === 'lg' ? 'w-3 h-3' : 'w-2 h-2'
+                }`}
                 initial={{ 
-                  x: 120, 
-                  y: 120, 
+                  x: centerPosition.x, 
+                  y: centerPosition.y, 
                   scale: 0, 
                   opacity: 0 
                 }}
                 animate={{ 
-                  x: 120 + (Math.cos(i * 45 * Math.PI / 180) * 60),
-                  y: 120 + (Math.sin(i * 45 * Math.PI / 180) * 60),
+                  x: centerPosition.x + (Math.cos(i * 45 * Math.PI / 180) * sizeConfig.particleRadius),
+                  y: centerPosition.y + (Math.sin(i * 45 * Math.PI / 180) * sizeConfig.particleRadius),
                   scale: [0, 1, 0],
                   opacity: [0, 1, 0]
                 }}

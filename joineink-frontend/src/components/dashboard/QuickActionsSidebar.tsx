@@ -102,6 +102,7 @@ export const QuickActionsSidebar: React.FC<QuickActionsSidebarProps> = ({
                           action.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md hover:border-primary-200'
                         }`}
                         onClick={action.disabled ? (e) => e.preventDefault() : undefined}
+                        aria-disabled={action.disabled ? "true" : undefined}
                       >
                         <ActionContent action={action} isHovered={hoveredAction === action.id} />
                       </Link>
@@ -112,6 +113,7 @@ export const QuickActionsSidebar: React.FC<QuickActionsSidebarProps> = ({
                         className={`w-full text-left p-4 rounded-lg border border-surface-border transition-all duration-200 ${
                           action.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md hover:border-primary-200'
                         }`}
+                        aria-disabled={action.disabled ? "true" : undefined}
                       >
                         <ActionContent action={action} isHovered={hoveredAction === action.id} />
                       </button>

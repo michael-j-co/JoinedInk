@@ -45,7 +45,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     setIsExpanded(false);
   };
 
-  const updateFilter = (key: keyof FilterOptions, value: any) => {
+  const updateFilter = <K extends keyof FilterOptions>(key: K, value: FilterOptions[K]) => {
     onFiltersChange({
       ...filters,
       [key]: value
@@ -175,7 +175,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
                   <label className="block text-sm font-medium text-text-secondary mb-2">Status</label>
                   <select
                     value={filters.status}
-                    onChange={(e) => updateFilter('status', e.target.value)}
+                    onChange={(e) => updateFilter('status', e.target.value as FilterOptions['status'])}
                     className="w-full px-3 py-2 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all duration-200 bg-surface-paper text-text-primary"
                   >
                     <option value="all">All Status</option>
@@ -190,7 +190,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
                   <label className="block text-sm font-medium text-text-secondary mb-2">Your Role</label>
                   <select
                     value={filters.role}
-                    onChange={(e) => updateFilter('role', e.target.value)}
+                    onChange={(e) => updateFilter('role', e.target.value as FilterOptions['role'])}
                     className="w-full px-3 py-2 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all duration-200 bg-surface-paper text-text-primary"
                   >
                     <option value="all">All Roles</option>
@@ -204,7 +204,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
                   <label className="block text-sm font-medium text-text-secondary mb-2">Event Type</label>
                   <select
                     value={filters.eventType}
-                    onChange={(e) => updateFilter('eventType', e.target.value)}
+                    onChange={(e) => updateFilter('eventType', e.target.value as FilterOptions['eventType'])}
                     className="w-full px-3 py-2 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all duration-200 bg-surface-paper text-text-primary"
                   >
                     <option value="all">All Types</option>
@@ -220,7 +220,7 @@ export const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
                 <div className="flex gap-2">
                   <select
                     value={filters.sortBy}
-                    onChange={(e) => updateFilter('sortBy', e.target.value)}
+                    onChange={(e) => updateFilter('sortBy', e.target.value as FilterOptions['sortBy'])}
                     className="px-3 py-2 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all duration-200 bg-surface-paper text-text-primary"
                   >
                     <option value="deadline">Deadline</option>

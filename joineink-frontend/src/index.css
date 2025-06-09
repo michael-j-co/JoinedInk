@@ -106,8 +106,7 @@ code {
 }
 
 .checkbox-sage:focus {
-  @apply ring-2 ring-offset-2;
-  ring-color: #8fbc8f;
+  @apply ring-2 ring-offset-2 ring-[#8fbc8f];
 }
 
 .checkbox-sage:hover {

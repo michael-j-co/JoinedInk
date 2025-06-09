@@ -425,8 +425,9 @@ export const ContributorPage: React.FC = () => {
         } : null);
       }
       
-      // Update progress and show confirmation modal
+      // Update progress and show success animation and confirmation modal
       setProgressStep('complete');
+      setShowSuccessAnimation(true);
       setConfirmationType(isUpdate ? 'message-updated' : 'message-submitted');
       setShowConfirmation(true);
       
@@ -1073,7 +1074,16 @@ export const ContributorPage: React.FC = () => {
         <Breadcrumb items={contributionBreadcrumbs} className="mb-4" />
       </div>
 
-
+      {/* Progress Indicator */}
+      {selectedRecipient && (
+        <div className="max-w-4xl mx-auto px-4">
+          <ContributionProgressIndicator
+            currentStep={progressStep}
+            recipientName={selectedRecipient.name}
+            className="mb-6"
+          />
+        </div>
+      )}
 
       {/* Clean Navigation Bar for Circle Notes */}
       {sessionInfo.event.eventType === 'CIRCLE_NOTES' && selectedRecipient && (
