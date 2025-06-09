@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { NoteEditor } from '../../components/forms/NoteEditor';
 import { NoteContent, BackgroundTheme } from '../../types';
@@ -112,10 +112,10 @@ export const ContributorPage: React.FC = () => {
     if (selectedRecipient) {
       const contentToSave = latestContentRef.current || currentContent;
       if (contentToSave) {
-        setRecipientDrafts(prev => ({
-          ...prev,
+      setRecipientDrafts(prev => ({
+        ...prev,
           [selectedRecipient.id]: contentToSave
-        }));
+      }));
       }
     }
 
@@ -358,9 +358,9 @@ export const ContributorPage: React.FC = () => {
       if (isUpdate) {
         // For updates, we could use a different endpoint or the same one
         // The backend should handle existing contributions
-        await axios.post('/api/contributions/submit', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+      await axios.post('/api/contributions/submit', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       } else {
         await axios.post('/api/contributions/submit', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -436,7 +436,7 @@ export const ContributorPage: React.FC = () => {
               setTimeout(() => {
                 setIsTransitioning(true);
                 setTimeout(() => {
-                  setSelectedRecipient(null);
+        setSelectedRecipient(null);
                   setCurrentContent(null);
                   setIsTransitioning(false);
                   setShowCompletionAnimation(false);
@@ -530,12 +530,12 @@ export const ContributorPage: React.FC = () => {
   };
 
   // Navigation helpers for quick previous/next functionality
-  const getCurrentRecipientIndex = () => {
+  const getCurrentRecipientIndex = useCallback(() => {
     if (!selectedRecipient || !sessionInfo) return -1;
     return sessionInfo.recipients.findIndex(r => r.id === selectedRecipient.id);
-  };
+  }, [selectedRecipient, sessionInfo]);
 
-  const navigateToPrevious = () => {
+  const navigateToPrevious = useCallback(() => {
     if (!sessionInfo || !selectedRecipient) return;
     
     // Force save the latest content from ref (most up-to-date)
@@ -552,9 +552,9 @@ export const ContributorPage: React.FC = () => {
       const previousRecipient = sessionInfo.recipients[currentIndex - 1];
       handleRecipientChange(previousRecipient);
     }
-  };
+  }, [sessionInfo, selectedRecipient, currentContent, getCurrentRecipientIndex, handleRecipientChange, setRecipientDrafts]);
 
-  const navigateToNext = () => {
+  const navigateToNext = useCallback(() => {
     if (!sessionInfo || !selectedRecipient) return;
     
     // Force save the latest content from ref (most up-to-date)
@@ -571,17 +571,17 @@ export const ContributorPage: React.FC = () => {
       const nextRecipient = sessionInfo.recipients[currentIndex + 1];
       handleRecipientChange(nextRecipient);
     }
-  };
+  }, [sessionInfo, selectedRecipient, currentContent, getCurrentRecipientIndex, handleRecipientChange, setRecipientDrafts]);
 
-  const canNavigatePrevious = () => {
+  const canNavigatePrevious = useCallback(() => {
     const currentIndex = getCurrentRecipientIndex();
     return currentIndex > 0;
-  };
+  }, [getCurrentRecipientIndex]);
 
-  const canNavigateNext = () => {
+  const canNavigateNext = useCallback(() => {
     const currentIndex = getCurrentRecipientIndex();
     return sessionInfo ? currentIndex < sessionInfo.recipients.length - 1 : false;
-  };
+  }, [getCurrentRecipientIndex, sessionInfo]);
 
   // Add keyboard shortcuts for navigation and submission
   useEffect(() => {
@@ -633,7 +633,7 @@ export const ContributorPage: React.FC = () => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedRecipient, currentContent]);
+  }, [selectedRecipient, currentContent, canNavigatePrevious, canNavigateNext, navigateToPrevious, navigateToNext, handleSaveWithCustomNavigation]);
 
   const formatDeadline = (deadline: string) => {
     return new Date(deadline).toLocaleDateString('en-US', {
@@ -948,7 +948,7 @@ export const ContributorPage: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Circle Participants</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Circle Participants</h2>
               )}
               
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1192,7 +1192,7 @@ export const ContributorPage: React.FC = () => {
                       When enabled, this name will be used for all your messages. 
                       When disabled, you can customize your name for each person.
                     </p>
-                  </div>
+              </div>
                 </div>
               </div>
 
@@ -1210,18 +1210,18 @@ export const ContributorPage: React.FC = () => {
       )}
 
       <div className={`transition-all duration-300 ease-in-out ${isTransitioning ? 'opacity-30 scale-95' : 'opacity-100 scale-100'}`}>
-        <NoteEditor
+      <NoteEditor
           key={selectedRecipient?.id || 'no-recipient'} // Force re-render when recipient changes
-          recipientName={selectedRecipient?.name || 'Unknown'}
-          eventTitle={sessionInfo.event.title}
+        recipientName={selectedRecipient?.name || 'Unknown'}
+        eventTitle={sessionInfo.event.title}
           initialContent={getInitialContent()}
-          onSave={handleSave}
-          onPreview={handlePreview}
-          onContentChange={handleContentChange}
-          isSubmitting={isSubmitting}
+        onSave={handleSave}
+        onPreview={handlePreview}
+        onContentChange={handleContentChange}
+        isSubmitting={isSubmitting}
           isUpdate={selectedRecipient ? submittedRecipients.has(selectedRecipient.id) : false}
-        />
+      />
       </div>
     </div>
-      );
-  }; 
+  );
+}; 
