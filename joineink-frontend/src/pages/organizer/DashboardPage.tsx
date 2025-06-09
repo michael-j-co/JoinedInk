@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { PageLoadingSpinner } from '../../components/common/LoadingSpinner';
 import { SuccessNotification } from '../../components/ui/ConfirmationModal';
+import { Breadcrumb, useBreadcrumbs } from '../../components/common/Breadcrumb';
+import { QuickActionsSidebar, getDefaultQuickActions } from '../../components/dashboard/QuickActionsSidebar';
+import { SearchAndFilter, FilterOptions, filterEvents } from '../../components/dashboard/SearchAndFilter';
 import axios from 'axios';
 
 interface Event {
@@ -50,8 +54,22 @@ export const DashboardPage: React.FC = () => {
   const [showSuccessNotification, setShowSuccessNotification] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Quick actions sidebar state
+  const [showQuickActions, setShowQuickActions] = useState(false);
+
+  // Search and filter state
+  const [filters, setFilters] = useState<FilterOptions>({
+    search: '',
+    status: 'all',
+    role: 'all',
+    eventType: 'all',
+    sortBy: 'deadline',
+    sortOrder: 'asc'
+  });
+
   const { user } = useAuth();
   const navigate = useNavigate();
+  const breadcrumbs = useBreadcrumbs();
 
   useEffect(() => {
     fetchEvents();
@@ -137,13 +155,34 @@ export const DashboardPage: React.FC = () => {
     return new Date(deadline) < new Date();
   };
 
-  // Calculate dashboard statistics
-  const createdEvents = events.filter(e => e.userRole === 'organizer');
-  const participatingEvents = events.filter(e => e.userRole === 'participant');
-  const totalEvents = events.length;
-  const activeEvents = events.filter(e => e.status === 'OPEN' && !isEventExpired(e.deadline)).length;
-  const totalContributions = events.reduce((sum, event) => sum + event._count.contributions, 0);
-  const completedEvents = events.filter(e => e.status === 'CLOSED' || isEventExpired(e.deadline)).length;
+  const getEventStatus = (event: Event) => {
+    if (event.status === 'CLOSED') return 'closed';
+    if (isEventExpired(event.deadline)) return 'expired';
+    return 'active';
+  };
+
+  // Calculate dashboard statistics - defensive checks to prevent undefined errors
+  const safeEvents = events || [];
+
+  // Filter and sort events based on current filters
+  const filteredEvents = useMemo(() => {
+    return filterEvents(safeEvents, filters, {
+      getStatus: getEventStatus,
+      getRole: (event: Event) => event.userRole,
+      getEventType: (event: Event) => event.eventType,
+      getTitle: (event: Event) => event.title,
+      getDescription: (event: Event) => event.description || '',
+      getDeadline: (event: Event) => event.deadline,
+      getCreatedAt: (event: Event) => event.createdAt,
+      getContributions: (event: Event) => event._count?.contributions || 0
+    });
+  }, [safeEvents, filters]);
+  const createdEvents = safeEvents.filter(e => e.userRole === 'organizer');
+  const participatingEvents = safeEvents.filter(e => e.userRole === 'participant');
+  const totalEvents = safeEvents.length;
+  const activeEvents = safeEvents.filter(e => e.status === 'OPEN' && !isEventExpired(e.deadline)).length;
+  const totalContributions = safeEvents.reduce((sum, event) => sum + (event._count?.contributions || 0), 0);
+  const completedEvents = safeEvents.filter(e => e.status === 'CLOSED' || isEventExpired(e.deadline)).length;
 
   // Batch actions functions
   const toggleEventSelection = (eventId: string) => {
@@ -155,7 +194,7 @@ export const DashboardPage: React.FC = () => {
   };
 
   const selectAllOwnedEvents = () => {
-    const ownedOpenEventIds = events
+    const ownedOpenEventIds = safeEvents
       .filter(e => e.userRole === 'organizer' && e.status === 'OPEN' && !isEventExpired(e.deadline))
       .map(e => e.id);
     setSelectedEventIds(ownedOpenEventIds);
@@ -228,6 +267,20 @@ export const DashboardPage: React.FC = () => {
     return tomorrow.toISOString().slice(0, 16);
   };
 
+  // Quick actions handlers
+  const handleSendReminders = () => {
+    setShowBatchReminderModal(true);
+    setShowQuickActions(false);
+  };
+
+  const handleViewAnalytics = () => {
+    // Navigate to analytics page (to be implemented)
+    navigate('/analytics');
+    setShowQuickActions(false);
+  };
+
+  const quickActions = getDefaultQuickActions(handleSendReminders, handleViewAnalytics);
+
   if (loading) {
     return <PageLoadingSpinner message="Loading your dashboard..." />;
   }
@@ -235,6 +288,9 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-neutral-cream to-neutral-ivory p-6">
       <div className="max-w-7xl mx-auto">
+        {/* Breadcrumb Navigation */}
+        <Breadcrumb items={breadcrumbs} className="mb-6" />
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-text-primary mb-2">
@@ -253,23 +309,71 @@ export const DashboardPage: React.FC = () => {
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft">
-            <div className="text-2xl font-bold text-primary-600 mb-1">{events.filter(e => e.userRole === 'organizer').length}</div>
+          <motion.div 
+            className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft transition-all duration-300 hover:shadow-lg"
+            whileHover={{ 
+              y: -2,
+              scale: 1.02,
+              transition: { type: "spring", stiffness: 300, damping: 20 }
+            }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <div className="text-2xl font-bold text-primary-600 mb-1">{createdEvents.length}</div>
             <div className="text-text-secondary text-sm font-medium">Created Events</div>
-          </div>
-          <div className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft">
-            <div className="text-2xl font-bold text-purple-600 mb-1">{events.filter(e => e.userRole === 'participant').length}</div>
+          </motion.div>
+          <motion.div 
+            className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft transition-all duration-300 hover:shadow-lg"
+            whileHover={{ 
+              y: -2,
+              scale: 1.02,
+              transition: { type: "spring", stiffness: 300, damping: 20 }
+            }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            <div className="text-2xl font-bold text-accent-rose mb-1">{participatingEvents.length}</div>
             <div className="text-text-secondary text-sm font-medium">Participating In</div>
-          </div>
-          <div className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft">
+          </motion.div>
+          <motion.div 
+            className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft transition-all duration-300 hover:shadow-lg"
+            whileHover={{ 
+              y: -2,
+              scale: 1.02,
+              transition: { type: "spring", stiffness: 300, damping: 20 }
+            }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.3 }}
+          >
             <div className="text-2xl font-bold text-accent-sage mb-1">{activeEvents}</div>
             <div className="text-text-secondary text-sm font-medium">Active Events</div>
-          </div>
-          <div className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft">
+          </motion.div>
+          <motion.div 
+            className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft transition-all duration-300 hover:shadow-lg"
+            whileHover={{ 
+              y: -2,
+              scale: 1.02,
+              transition: { type: "spring", stiffness: 300, damping: 20 }
+            }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.4 }}
+          >
             <div className="text-2xl font-bold text-accent-gold mb-1">{totalContributions}</div>
             <div className="text-text-secondary text-sm font-medium">Total Contributions</div>
-          </div>
+          </motion.div>
         </div>
+
+        {/* Search and Filter */}
+        <SearchAndFilter
+          filters={filters}
+          onFiltersChange={setFilters}
+          resultCount={filteredEvents.length}
+          className="mb-8"
+        />
 
         {/* Events Header with Batch Actions */}
         <div className="mb-8">
@@ -289,71 +393,111 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           {/* Batch Actions Bar */}
-          {events.filter(e => e.userRole === 'organizer' && e.status === 'OPEN' && !isEventExpired(e.deadline)).length > 0 && (
-            <div className="bg-surface-paper rounded-lg p-4 border border-surface-border shadow-soft">
-              <div className="flex items-center justify-between">
+          {safeEvents.filter(e => e.userRole === 'organizer' && e.status === 'OPEN' && !isEventExpired(e.deadline)).length > 0 && (
+            <motion.div 
+              className="bg-surface-paper rounded-lg p-4 border border-surface-border shadow-soft"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <div className="flex items-center justify-between min-h-[40px]">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <button
+                    <motion.button
                       onClick={selectAllOwnedEvents}
-                      className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                      className="text-sm text-accent-sage hover:text-green-600 font-medium transition-colors"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                     >
                       Select All
-                    </button>
+                    </motion.button>
                     <span className="text-text-tertiary">|</span>
-                    <button
+                    <motion.button
                       onClick={clearSelection}
-                      className="text-sm text-text-secondary hover:text-text-primary font-medium"
+                      className="text-sm text-text-secondary hover:text-text-primary font-medium transition-colors"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                     >
                       Clear
-                    </button>
+                    </motion.button>
                   </div>
-                  {selectedEventIds.length > 0 && (
-                    <span className="text-sm text-text-secondary">
-                      {selectedEventIds.length} event{selectedEventIds.length !== 1 ? 's' : ''} selected
-                    </span>
-                  )}
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ 
+                      opacity: selectedEventIds.length > 0 ? 1 : 0,
+                      x: selectedEventIds.length > 0 ? 0 : -20
+                    }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                  >
+                    {selectedEventIds.length > 0 && (
+                      <span className="text-sm text-text-secondary">
+                        {selectedEventIds.length} event{selectedEventIds.length !== 1 ? 's' : ''} selected
+                      </span>
+                    )}
+                  </motion.div>
                 </div>
 
-                {/* Batch Action Buttons */}
-                {selectedEventIds.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setShowBatchExtendModal(true)}
-                      className="px-3 py-2 bg-accent-sage text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      Extend Deadline
-                    </button>
-                    <button
-                      onClick={() => setShowBatchReminderModal(true)}
-                      className="px-3 py-2 bg-accent-terracotta text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 3.26a2 2 0 001.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      Send Reminders
-                    </button>
-                  </div>
-                )}
+                {/* Batch Action Buttons - Fixed positioning to prevent layout shift */}
+                <div className="flex items-center gap-2 h-[40px]">
+                  <motion.div
+                    className="flex items-center gap-2"
+                    initial={{ opacity: 0, scale: 0.8, x: 20 }}
+                    animate={{ 
+                      opacity: selectedEventIds.length > 0 ? 1 : 0,
+                      scale: selectedEventIds.length > 0 ? 1 : 0.8,
+                      x: selectedEventIds.length > 0 ? 0 : 20
+                    }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                  >
+                    {selectedEventIds.length > 0 && (
+                      <>
+                        <motion.button
+                          onClick={() => setShowBatchExtendModal(true)}
+                          className="px-3 py-2 bg-accent-sage text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium flex items-center gap-2"
+                          whileHover={{ scale: 1.05, y: -1 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          Extend Deadline
+                        </motion.button>
+                        <motion.button
+                          onClick={() => setShowBatchReminderModal(true)}
+                          className="px-3 py-2 bg-accent-terracotta text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium flex items-center gap-2"
+                          whileHover={{ scale: 1.05, y: -1 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 3.26a2 2 0 001.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          Send Reminders
+                        </motion.button>
+                      </>
+                    )}
+                  </motion.div>
+                </div>
               </div>
-            </div>
+            </motion.div>
           )}
         </div>
 
         {/* Events List */}
-        {events.length === 0 ? (
+        {filteredEvents.length === 0 ? (
           <div className="bg-surface-paper rounded-xl p-12 text-center border border-surface-border shadow-soft">
             <div className="w-16 h-16 bg-neutral-warm rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-text-primary mb-2">No events yet</h3>
+            <h3 className="text-lg font-medium text-text-primary mb-2">
+              {safeEvents.length === 0 ? 'No events yet' : 'No events match your filters'}
+            </h3>
             <p className="text-text-secondary mb-6">
-              Create your first keepsake event to start collecting heartfelt contributions.
+              {safeEvents.length === 0 
+                ? 'Create your first keepsake event to start collecting heartfelt contributions.'
+                : 'Try adjusting your search or filter criteria to find events.'
+              }
             </p>
             <Link
               to="/create-event"
@@ -364,12 +508,23 @@ export const DashboardPage: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {events.map((event) => {
+            {filteredEvents.map((event, index) => {
               const expired = isEventExpired(event.deadline);
               const eventTypeColor = getEventTypeColor(event.eventType);
               
               return (
-                <div key={event.id} className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft">
+                <motion.div 
+                  key={event.id} 
+                  className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft transition-all duration-300 hover:shadow-xl hover:border-primary-200"
+                  whileHover={{ 
+                    y: -4,
+                    scale: 1.02,
+                    transition: { type: "spring", stiffness: 300, damping: 20 }
+                  }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.05 * index }}
+                >
                   <div className="flex items-start justify-between">
                     {/* Checkbox for owned open events */}
                     {event.userRole === 'organizer' && event.status === 'OPEN' && !expired && (
@@ -378,7 +533,7 @@ export const DashboardPage: React.FC = () => {
                           type="checkbox"
                           checked={selectedEventIds.includes(event.id)}
                           onChange={() => toggleEventSelection(event.id)}
-                          className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                          className="checkbox-sage"
                         />
                       </div>
                     )}
@@ -494,7 +649,7 @@ export const DashboardPage: React.FC = () => {
                       )}
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
@@ -732,6 +887,13 @@ export const DashboardPage: React.FC = () => {
           position="top"
         />
       </div>
+
+      {/* Quick Actions Sidebar */}
+      <QuickActionsSidebar
+        isVisible={showQuickActions}
+        onToggle={() => setShowQuickActions(!showQuickActions)}
+        actions={quickActions}
+      />
     </div>
   );
 }; 

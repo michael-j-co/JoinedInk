@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { NoteEditor } from '../../components/forms/NoteEditor';
 import { NoteContent, BackgroundTheme } from '../../types';
 import { createSafeHtml } from '../../utils/sanitizeHtml';
 import { PageLoadingSpinner, OverlayLoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
+import { ContributionProgressIndicator } from '../../components/common/ProgressIndicator';
+import { SuccessAnimation } from '../../components/common/LoadingSpinner';
+import { Breadcrumb } from '../../components/common/Breadcrumb';
 import axios from 'axios';
 
 interface Event {
@@ -60,6 +64,12 @@ export const ContributorPage: React.FC = () => {
   // Animation states
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showCompletionAnimation, setShowCompletionAnimation] = useState(false);
+  
+  // Progress tracking
+  const [progressStep, setProgressStep] = useState<'writing' | 'adding-media' | 'preview' | 'submitting' | 'complete'>('writing');
+  
+  // Success animation
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   
   // Ref to store the latest content from NoteEditor
   const latestContentRef = useRef<NoteContent | null>(null);
@@ -321,6 +331,7 @@ export const ContributorPage: React.FC = () => {
     }
     
     setIsSubmitting(true);
+    setProgressStep('submitting');
     try {
       const formData = new FormData();
       formData.append('contributorToken', token);
@@ -414,7 +425,8 @@ export const ContributorPage: React.FC = () => {
         } : null);
       }
       
-      // Show beautiful confirmation modal
+      // Update progress and show confirmation modal
+      setProgressStep('complete');
       setConfirmationType(isUpdate ? 'message-updated' : 'message-submitted');
       setShowConfirmation(true);
       
@@ -434,7 +446,7 @@ export const ContributorPage: React.FC = () => {
               handleRecipientChange(nextUnsubmittedRecipient);
               setIsTransitioning(false);
             }, 300); // Fade out duration
-          }, 1500); // Give time for success message to be seen
+          }, 2000); // Give time for confirmation modal to be seen
         } else {
           // Check if there are any unsubmitted recipients from the beginning
           const anyUnsubmittedRecipient = sessionInfo.recipients
@@ -448,7 +460,7 @@ export const ContributorPage: React.FC = () => {
                 handleRecipientChange(anyUnsubmittedRecipient);
                 setIsTransitioning(false);
               }, 300);
-            }, 1500);
+            }, 2000);
           } else {
             // All recipients have messages, show beautiful completion confirmation
             setTimeout(() => {
@@ -457,7 +469,7 @@ export const ContributorPage: React.FC = () => {
               setTimeout(() => {
                 setShowCompletionAnimation(true);
               }, 300);
-            }, 1000);
+            }, 2000);
           }
         }
       } else {
@@ -489,6 +501,7 @@ export const ContributorPage: React.FC = () => {
 
   const handlePreview = (content: NoteContent) => {
     setCurrentContent(content);
+    setProgressStep('preview');
     setShowPreview(true);
   };
 
@@ -496,6 +509,17 @@ export const ContributorPage: React.FC = () => {
     // Store the latest content in ref for immediate access
     latestContentRef.current = content;
     setCurrentContent(content);
+    
+    // Update progress based on content
+    if (content.text?.trim() || content.media?.length || content.drawings?.length || content.signature) {
+      if (content.media?.length || content.drawings?.length) {
+        setProgressStep('adding-media');
+      } else {
+        setProgressStep('writing');
+      }
+    } else {
+      setProgressStep('writing');
+    }
     
     // Auto-save draft for current recipient
     if (selectedRecipient) {
@@ -1037,78 +1061,87 @@ export const ContributorPage: React.FC = () => {
     };
   };
 
+  const contributionBreadcrumbs = [
+    { label: 'Contributions', path: undefined, isActive: false },
+    { label: sessionInfo?.event.title || 'Event', path: undefined, isActive: true }
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Breadcrumb Navigation */}
+      <div className="max-w-4xl mx-auto px-4 pt-6">
+        <Breadcrumb items={contributionBreadcrumbs} className="mb-4" />
+      </div>
 
 
-            {/* Simplified Navigation Bar for Circle Notes */}
+
+      {/* Clean Navigation Bar for Circle Notes */}
       {sessionInfo.event.eventType === 'CIRCLE_NOTES' && selectedRecipient && (
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 sticky top-0 z-10 shadow-sm">
-          <div className="max-w-6xl mx-auto px-6 py-3">
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+          <div className="max-w-4xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
-              {/* Left side - Navigation */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setSelectedRecipient(null)}
-                  className="flex items-center gap-2 px-3 py-1.5 text-gray-600 hover:text-gray-800 hover:bg-white rounded-lg transition-all text-sm font-medium"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  All Participants
-                </button>
-              </div>
+              {/* Left - Back to participants */}
+              <button
+                onClick={() => setSelectedRecipient(null)}
+                className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-all text-sm font-medium"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                All Participants
+              </button>
 
-                            {/* Center - Current participant and navigation */}
-              <div className="flex items-center gap-2 bg-white rounded-xl px-4 py-2 shadow-sm border border-gray-200 w-80">
+              {/* Center - Current participant with navigation */}
+              <div className="flex items-center gap-4">
                 <button
                   onClick={navigateToPrevious}
                   disabled={!canNavigatePrevious()}
-                  className="p-1 rounded-md hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 hover:text-gray-800 transition-all flex-shrink-0"
+                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 hover:text-gray-800 transition-all"
                   title="Previous participant (Ctrl/Cmd + ←)"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
                 
-                <div className="text-center flex-1 min-w-0">
-                  <div className="font-semibold text-gray-900 truncate">{selectedRecipient.name}</div>
+                <div className="text-center">
+                  <div className="font-semibold text-gray-900">{selectedRecipient.name}</div>
                   <div className="text-xs text-gray-500">
-                    {getCurrentRecipientIndex() + 1} of {sessionInfo.recipients.length}
+                    {getCurrentRecipientIndex() + 1} of {sessionInfo.recipients.length} •{' '}
+                    {sessionInfo.completedRecipients.length} completed
                   </div>
                 </div>
                 
                 <button
                   onClick={navigateToNext}
                   disabled={!canNavigateNext()}
-                  className="p-1 rounded-md hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 hover:text-gray-800 transition-all flex-shrink-0"
+                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 hover:text-gray-800 transition-all"
                   title="Next participant (Ctrl/Cmd + →)"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               </div>
 
-              {/* Right side - Settings and progress */}
-              <div className="flex items-center gap-3">
-                <div className="text-sm text-gray-600 hidden sm:block">
-                  {sessionInfo.completedRecipients.length} of {sessionInfo.recipients.length} completed
-                </div>
-                <div className="text-xs text-gray-500 hidden lg:block">
-                  <div>Ctrl/Cmd + Enter: Submit & Next</div>
-                  <div>Ctrl/Cmd + ← →: Navigate</div>
-                </div>
-                <button
-                  onClick={() => setShowNameSettings(!showNameSettings)}
-                  className="flex items-center gap-2 px-3 py-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all text-sm font-medium"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  <span className="hidden sm:inline">Name Settings</span>
-                </button>
+              {/* Right - Name settings */}
+              <button
+                onClick={() => setShowNameSettings(!showNameSettings)}
+                className="flex items-center gap-2 px-3 py-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all text-sm font-medium"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span className="hidden sm:inline">Settings</span>
+              </button>
+            </div>
+
+            {/* Keyboard shortcuts hint */}
+            <div className="mt-2 text-center">
+              <div className="text-xs text-gray-400">
+                <span className="hidden md:inline">Ctrl/Cmd + Enter: Submit & Next • </span>
+                <span className="hidden lg:inline">Ctrl/Cmd + ← →: Navigate • </span>
+                Writing for {sessionInfo.event.title}
               </div>
             </div>
           </div>
@@ -1153,6 +1186,13 @@ export const ContributorPage: React.FC = () => {
       {isTransitioning && (
         <OverlayLoadingSpinner message="Loading next message..." />
       )}
+
+      {/* Success Animation */}
+      <SuccessAnimation
+        isVisible={showSuccessAnimation}
+        onComplete={() => setShowSuccessAnimation(false)}
+        message="Message sent successfully!"
+      />
 
       {/* Name Settings Panel - Now as a separate floating card when needed */}
       {sessionInfo.event.eventType === 'CIRCLE_NOTES' && showNameSettings && (

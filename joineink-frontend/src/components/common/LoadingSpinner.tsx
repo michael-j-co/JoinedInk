@@ -4,7 +4,7 @@ import { HeartIcon, BookOpenIcon, SparklesIcon } from '@heroicons/react/24/outli
 
 export interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
-  variant?: 'heart' | 'book' | 'sparkles' | 'ink' | 'pulse';
+  variant?: 'heart' | 'book' | 'sparkles' | 'ink' | 'pulse' | 'warm-dots' | 'flowing-hearts' | 'gentle-pulse';
   message?: string;
   theme?: 'light' | 'dark' | 'cream';
   className?: string;
@@ -203,6 +203,93 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
           </div>
         );
 
+      case 'warm-dots':
+        return (
+          <div className="flex items-center space-x-2">
+            {[0, 1, 2].map((index) => (
+              <motion.div
+                key={index}
+                animate={{
+                  y: [-8, 8, -8],
+                  backgroundColor: [
+                    'rgb(168, 151, 132)', // primary-500
+                    'rgb(212, 165, 165)', // accent-rose
+                    'rgb(156, 172, 149)', // accent-sage
+                    'rgb(168, 151, 132)'  // back to primary-500
+                  ]
+                }}
+                transition={{
+                  duration: 1.2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: index * 0.15
+                }}
+                className="w-3 h-3 rounded-full"
+              />
+            ))}
+          </div>
+        );
+
+      case 'flowing-hearts':
+        return (
+          <div className="relative w-12 h-12">
+            {[0, 1, 2].map((index) => (
+              <motion.div
+                key={index}
+                animate={{
+                  x: [0, 20, 0],
+                  y: [0, -10, 0],
+                  opacity: [0.3, 1, 0.3],
+                  scale: [0.8, 1.2, 0.8]
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: index * 0.4
+                }}
+                className={`absolute ${colors.secondary}`}
+                style={{
+                  left: `${index * 8}px`,
+                  top: `${index * 4}px`
+                }}
+              >
+                <HeartIcon className="w-4 h-4" />
+              </motion.div>
+            ))}
+          </div>
+        );
+
+      case 'gentle-pulse':
+        return (
+          <motion.div
+            animate={{
+              scale: [1, 1.15, 1],
+              opacity: [0.8, 1, 0.8]
+            }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              ease: "easeInOut"
+            }}
+            className={`${iconSize} ${colors.primary} rounded-full bg-current opacity-20 relative`}
+          >
+            <motion.div
+              animate={{
+                scale: [0.8, 1, 0.8],
+                opacity: [1, 0.7, 1]
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 0.3
+              }}
+              className={`absolute inset-2 ${colors.secondary} rounded-full bg-current`}
+            />
+          </motion.div>
+        );
+
       default:
         return null;
     }
@@ -248,7 +335,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
               ease: "easeInOut",
               delay: index * 0.2
             }}
-            className={`w-1.5 h-1.5 ${colors.tertiary} rounded-full`}
+            className={`w-1.5 h-1.5 ${colors.tertiary} rounded-full bg-current`}
           />
         ))}
       </motion.div>
@@ -256,10 +343,44 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   );
 };
 
-// Pre-configured loading states for common use cases
+// Enhanced loading spinner variants
 export const PageLoadingSpinner: React.FC<{ message?: string }> = ({ message = "Loading..." }) => (
   <div className="min-h-screen bg-gradient-to-br from-neutral-cream to-neutral-ivory flex items-center justify-center">
-    <div className="bg-surface-paper rounded-2xl shadow-soft-lg p-8 border border-surface-border">
+    <LoadingSpinner
+      size="xl"
+      variant="flowing-hearts"
+      message={message}
+      theme="cream"
+    />
+  </div>
+);
+
+export const ContentLoadingSpinner: React.FC<{ message?: string; className?: string }> = ({ 
+  message = "Loading content...", 
+  className = "" 
+}) => (
+  <div className={`flex items-center justify-center py-12 ${className}`}>
+    <LoadingSpinner
+      size="lg"
+      variant="warm-dots"
+      message={message}
+      theme="cream"
+    />
+  </div>
+);
+
+export const ButtonLoadingSpinner: React.FC<{ variant?: 'heart' | 'ink' | 'gentle' }> = ({ variant = 'gentle' }) => (
+  <LoadingSpinner
+    size="sm"
+    variant={variant === 'gentle' ? 'gentle-pulse' : variant}
+    theme="light"
+    className="mr-2"
+  />
+);
+
+export const OverlayLoadingSpinner: React.FC<{ message?: string }> = ({ message = "Processing..." }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="bg-surface-paper rounded-xl p-8 shadow-2xl border border-surface-border">
       <LoadingSpinner
         size="lg"
         variant="heart"
@@ -270,38 +391,93 @@ export const PageLoadingSpinner: React.FC<{ message?: string }> = ({ message = "
   </div>
 );
 
-export const ContentLoadingSpinner: React.FC<{ message?: string; className?: string }> = ({ 
-  message = "Loading content...", 
-  className = "" 
-}) => (
-  <div className={`flex items-center justify-center py-8 ${className}`}>
-    <LoadingSpinner
-      size="md"
-      variant="book"
-      message={message}
-      theme="cream"
-    />
-  </div>
-);
+// New Success Animation Component
+export const SuccessAnimation: React.FC<{
+  isVisible: boolean;
+  onComplete?: () => void;
+  message?: string;
+  size?: 'sm' | 'md' | 'lg';
+}> = ({ 
+  isVisible, 
+  onComplete, 
+  message = "Success!", 
+  size = 'md' 
+}) => {
+  React.useEffect(() => {
+    if (isVisible && onComplete) {
+      const timer = setTimeout(onComplete, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isVisible, onComplete]);
 
-export const ButtonLoadingSpinner: React.FC<{ variant?: 'heart' | 'ink' }> = ({ variant = 'ink' }) => (
-  <LoadingSpinner
-    size="sm"
-    variant={variant}
-    theme="light"
-    className="text-white"
-  />
-);
+  if (!isVisible) return null;
 
-export const OverlayLoadingSpinner: React.FC<{ message?: string }> = ({ message = "Processing..." }) => (
-  <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
-    <div className="bg-white rounded-2xl shadow-2xl p-8 mx-4 max-w-sm w-full border border-gray-100">
-      <LoadingSpinner
-        size="lg"
-        variant="sparkles"
-        message={message}
-        theme="light"
-      />
-    </div>
-  </div>
-); 
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.5 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.5 }}
+      transition={{ type: "spring", stiffness: 300, damping: 25 }}
+      className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
+    >
+      <div className="bg-surface-paper rounded-xl p-6 shadow-2xl border border-surface-border">
+        <div className="text-center">
+          {/* Celebratory animation */}
+          <motion.div
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+            className="w-16 h-16 bg-gradient-to-r from-accent-sage to-green-500 rounded-full flex items-center justify-center mx-auto mb-4"
+          >
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.5, type: "spring", stiffness: 400 }}
+            >
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            </motion.div>
+          </motion.div>
+
+          {/* Success message */}
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            className="text-text-primary font-medium"
+          >
+            {message}
+          </motion.p>
+
+          {/* Particle celebration */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {[...Array(8)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-2 h-2 bg-accent-sage rounded-full"
+                initial={{ 
+                  x: 120, 
+                  y: 120, 
+                  scale: 0, 
+                  opacity: 0 
+                }}
+                animate={{ 
+                  x: 120 + (Math.cos(i * 45 * Math.PI / 180) * 60),
+                  y: 120 + (Math.sin(i * 45 * Math.PI / 180) * 60),
+                  scale: [0, 1, 0],
+                  opacity: [0, 1, 0]
+                }}
+                transition={{ 
+                  delay: 0.8 + i * 0.1,
+                  duration: 1.5,
+                  ease: "easeOut"
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}; 

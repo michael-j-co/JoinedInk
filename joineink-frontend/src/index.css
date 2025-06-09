@@ -73,7 +73,16 @@ code {
 }
 
 .card:hover {
-  @apply shadow-xl;
+  @apply shadow-xl transform -translate-y-1;
+}
+
+/* Enhanced card hover effects */
+.card-interactive {
+  @apply bg-white rounded-xl shadow-soft border border-surface-border transition-all duration-300;
+}
+
+.card-interactive:hover {
+  @apply shadow-xl border-primary-200 transform -translate-y-2 scale-105;
 }
 
 /* Input styles */
@@ -83,6 +92,30 @@ code {
 
 .input-field:focus {
   @apply outline-none;
+}
+
+/* Custom checkbox styles with sage green */
+.checkbox-sage {
+  @apply w-4 h-4 bg-gray-100 border-gray-300 rounded transition-all duration-200;
+  accent-color: #8fbc8f; /* Sage green color */
+}
+
+.checkbox-sage:checked {
+  background-color: #8fbc8f;
+  border-color: #8fbc8f;
+}
+
+.checkbox-sage:focus {
+  @apply ring-2 ring-offset-2;
+  ring-color: #8fbc8f;
+}
+
+.checkbox-sage:hover {
+  transform: scale(1.1);
+}
+
+.checkbox-sage:active {
+  transform: scale(0.9);
 }
 
 /* Custom scrollbar */
@@ -176,6 +209,45 @@ code {
   }
 }
 
+/* Enhanced success animations */
+@keyframes success-burst {
+  0% {
+    transform: scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2) rotate(180deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(360deg);
+    opacity: 1;
+  }
+}
+
+@keyframes float-up {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-60px) scale(0.8);
+    opacity: 0;
+  }
+}
+
+@keyframes heart-beat {
+  0%, 20%, 50%, 80%, 100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.1);
+  }
+  60% {
+    transform: scale(1.05);
+  }
+}
+
 /* Apply animations */
 .animate-slide-up {
   animation: slide-up 0.6s ease-out;
@@ -191,6 +263,18 @@ code {
 
 .animate-pulse-gentle {
   animation: pulse-gentle 2s infinite;
+}
+
+.animate-success-burst {
+  animation: success-burst 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.animate-float-up {
+  animation: float-up 1.5s ease-out forwards;
+}
+
+.animate-heart-beat {
+  animation: heart-beat 1.5s ease-in-out infinite;
 }
 
 /* Smooth transitions for page content */

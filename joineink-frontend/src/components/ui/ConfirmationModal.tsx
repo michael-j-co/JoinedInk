@@ -190,26 +190,30 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 {title || defaultContent.title}
               </motion.div>
               
-              {/* Floating particles animation */}
+              {/* Enhanced floating particles animation */}
               <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                {[...Array(6)].map((_, i) => (
+                {[...Array(12)].map((_, i) => (
                   <motion.div
                     key={i}
-                    className="absolute w-2 h-2 bg-white rounded-full opacity-30"
+                    className="absolute bg-white rounded-full"
                     style={{
-                      left: `${20 + i * 12}%`,
+                      width: Math.random() * 4 + 2 + 'px',
+                      height: Math.random() * 4 + 2 + 'px',
+                      left: `${10 + i * 7}%`,
                       top: `${30 + (i % 2) * 40}%`
                     }}
                     animate={{
-                      y: [-10, 10, -10],
-                      opacity: [0.3, 0.8, 0.3],
-                      scale: [0.8, 1.2, 0.8]
+                      y: [-15, 15, -15],
+                      x: [0, (Math.random() - 0.5) * 20, 0],
+                      opacity: [0.2, 0.8, 0.2],
+                      scale: [0.6, 1.4, 0.6],
+                      rotate: [0, 360, 720]
                     }}
                     transition={{
-                      duration: 2 + i * 0.5,
+                      duration: 3 + Math.random() * 2,
                       repeat: Infinity,
                       ease: "easeInOut",
-                      delay: i * 0.3
+                      delay: i * 0.15
                     }}
                   />
                 ))}

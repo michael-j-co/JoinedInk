@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { 
   BookOpenIcon, 
   ArrowDownTrayIcon, 
@@ -157,7 +158,7 @@ export const KeepsakeBookPage: React.FC = () => {
     const fontFamily = contribution.fontFamily || 'Inter, sans-serif';
 
     return (
-      <div
+      <motion.div
         key={contribution.id}
         className={`contribution-page mb-8 sm:mb-12 p-6 sm:p-8 rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl ${index > 0 ? 'print-break' : ''}`}
         style={{ 
@@ -166,6 +167,15 @@ export const KeepsakeBookPage: React.FC = () => {
           minHeight: '300px',
           border: '1px solid rgba(0,0,0,0.1)'
         }}
+        whileHover={{ 
+          y: -8,
+          scale: 1.02,
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          transition: { type: "spring", stiffness: 300, damping: 20 }
+        }}
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: index * 0.1 }}
       >
         {/* Content */}
         {contribution.content && (
@@ -281,7 +291,7 @@ export const KeepsakeBookPage: React.FC = () => {
             </span>
           </div>
         )}
-      </div>
+      </motion.div>
     );
   };
 
