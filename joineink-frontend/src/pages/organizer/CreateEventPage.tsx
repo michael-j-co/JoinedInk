@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { DateTimePicker } from '../../components/ui/DateTimePicker';
 import axios from 'axios';
 
 interface EventFormData {
@@ -254,12 +255,11 @@ export const CreateEventPage: React.FC = () => {
                   <label className="block text-sm font-medium text-text-secondary mb-2">
                     Contribution Deadline *
                   </label>
-                  <input
-                    type="datetime-local"
+                  <DateTimePicker
                     value={formData.deadline}
-                    onChange={(e) => handleInputChange('deadline', e.target.value)}
-                    min={getTomorrowMinDate()}
-                    className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary custom-date-input"
+                    onChange={(value) => handleInputChange('deadline', value)}
+                    minDate={getTomorrowMinDate()}
+                    placeholder="Select deadline date and time"
                   />
                 </div>
 
