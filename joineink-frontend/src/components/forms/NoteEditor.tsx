@@ -27,6 +27,7 @@ interface NoteEditorProps {
   onPreview: (content: NoteContent) => void;
   onContentChange?: (content: NoteContent) => void;
   isSubmitting?: boolean;
+  isUpdate?: boolean;
 }
 
 const FONT_OPTIONS: FontOption[] = [
@@ -54,7 +55,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   onSave,
   onPreview,
   onContentChange,
-  isSubmitting = false
+  isSubmitting = false,
+  isUpdate = false
 }) => {
   const [content, setContent] = useState<NoteContent>({
     recipientName,
@@ -184,13 +186,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
   }, []);
 
-  // Handle contributor name change
-  const handleContributorNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setContent(prev => ({
-      ...prev,
-      contributorName: e.target.value
-    }));
-  }, []);
+
 
   // Handle rich text formatting
   const applyFormatting = useCallback((command: string, value?: string) => {
@@ -482,7 +478,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   return (
     <div className="max-w-6xl mx-auto p-6">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Write a Message for {recipientName}
         </h1>
@@ -490,7 +486,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       </div>
 
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-gray-200 mb-4">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
           {[
             { id: 'write', name: 'Write', icon: PencilSquareIcon },
@@ -516,23 +512,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       <div ref={containerRef} className="flex flex-col lg:flex-row gap-4 relative">
         {/* Editor Panel */}
-        <div className="space-y-6 lg:min-w-0" style={{ width: isLargeScreen ? `${100 - previewWidth}%` : '100%' }}>
+        <div className="space-y-4 lg:min-w-0" style={{ width: isLargeScreen ? `${100 - previewWidth}%` : '100%' }}>
           {activeTab === 'write' && (
             <div className="space-y-4">
-              {/* Contributor Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Your Name (Optional - leave blank for anonymous)
-                </label>
-                <input
-                  type="text"
-                  value={content.contributorName}
-                  onChange={handleContributorNameChange}
-                  placeholder="Enter your name or leave blank"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
-                />
-              </div>
-
               {/* Font Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Font</label>
@@ -860,7 +842,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 </p>
               )}
             </div>
-            <div className="h-96 overflow-y-auto">
+            <div className="h-80 overflow-y-auto">
               <NotePreview 
                 content={content} 
                 theme={currentTheme}
@@ -874,7 +856,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       </div>
 
       {/* Action Buttons */}
-      <div className="mt-8 flex justify-between items-center">
+      <div className="mt-4 flex justify-between items-center">
         <button
           onClick={handlePreview}
           className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
@@ -891,12 +873,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {isSubmitting ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              <span>Submitting...</span>
+              <span>{isUpdate ? 'Updating...' : 'Submitting...'}</span>
             </>
           ) : (
             <>
               <CloudArrowUpIcon className="h-5 w-5" />
-              <span>Submit Message</span>
+              <span>{isUpdate ? 'Update Message' : 'Submit Message'}</span>
             </>
           )}
         </button>

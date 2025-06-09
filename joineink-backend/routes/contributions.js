@@ -57,7 +57,8 @@ router.get('/session/:token', async (req, res) => {
         user: {
           select: {
             id: true,
-            email: true
+            email: true,
+            name: true
           }
         }
       }
@@ -95,7 +96,8 @@ router.get('/session/:token', async (req, res) => {
       completedRecipients: session.completedRecipients || [],
       currentUser: session.user ? {
         id: session.user.id,
-        email: session.user.email
+        email: session.user.email,
+        name: session.user.name
       } : null
     });
   } catch (error) {
@@ -209,10 +211,6 @@ router.post('/submit', upload.array('images', 10), async (req, res) => {
       }
     });
 
-    if (existingContribution) {
-      return res.status(400).json({ error: 'You have already submitted a note for this recipient' });
-    }
-
     // Process uploaded images and create URLs mapping
     const uploadedImageUrls = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
     
@@ -288,27 +286,41 @@ router.post('/submit', upload.array('images', 10), async (req, res) => {
       }
     }
 
-    // Create contribution with comprehensive data structure
-    const contribution = await prisma.contribution.create({
-      data: {
-        content: content || '',
-        contributorName: contributorName || null,
-        contributorToken,
-        fontFamily: formattingData?.fontFamily || fontFamily || 'Arial',
-        backgroundColor: backgroundColor || 'clean',
-        signature: signatureData,
-        images: uploadedImageUrls, // Legacy field for uploaded images
-        stickers: stickersData, // Legacy field for backward compatibility
-        media: mediaItems, // New comprehensive media field
-        drawings: drawingsData,
-        formatting: formattingData,
-        eventId: session.eventId,
-        recipientId
-      }
-    });
+    // Prepare contribution data
+    const contributionData = {
+      content: content || '',
+      contributorName: contributorName || null,
+      contributorToken,
+      fontFamily: formattingData?.fontFamily || fontFamily || 'Arial',
+      backgroundColor: backgroundColor || 'clean',
+      signature: signatureData,
+      images: uploadedImageUrls, // Legacy field for uploaded images
+      stickers: stickersData, // Legacy field for backward compatibility
+      media: mediaItems, // New comprehensive media field
+      drawings: drawingsData,
+      formatting: formattingData,
+      eventId: session.eventId,
+      recipientId
+    };
+
+    // Create or update contribution
+    let contribution;
+    if (existingContribution) {
+      // Update existing contribution
+      contribution = await prisma.contribution.update({
+        where: { id: existingContribution.id },
+        data: contributionData
+      });
+    } else {
+      // Create new contribution
+      contribution = await prisma.contribution.create({
+        data: contributionData
+      });
+    }
 
     // Update session to track completed recipients (for circle notes)
-    if (session.event.eventType === 'CIRCLE_NOTES') {
+    // Only add to completed list if it's a new contribution
+    if (session.event.eventType === 'CIRCLE_NOTES' && !existingContribution) {
       const updatedCompletedRecipients = [...(session.completedRecipients || []), recipientId];
       await prisma.contributorSession.update({
         where: { token: contributorToken },
@@ -318,8 +330,9 @@ router.post('/submit', upload.array('images', 10), async (req, res) => {
       });
     }
 
-    res.status(201).json({
-      message: 'Contribution submitted successfully',
+    res.status(existingContribution ? 200 : 201).json({
+      message: existingContribution ? 'Contribution updated successfully' : 'Contribution submitted successfully',
+      isUpdate: !!existingContribution,
       contribution: {
         id: contribution.id,
         recipientName: recipient.name
