@@ -6,15 +6,18 @@ export interface SeasonalInfo {
 }
 
 export const getCurrentSeason = (): string => {
-  const month = new Date().getMonth();
+  const month = new Date().getMonth(); // 0-11 (0=January, 1=February, etc.)
   const day = new Date().getDate();
   
-  // More precise seasonal boundaries
-  if ((month === 2 && day >= 20) || (month >= 3 && month <= 5) || (month === 5 && day < 21)) {
+  // Clear seasonal boundaries with no overlaps
+  // Spring: March 20 - June 20
+  if (month < 2 || (month === 2 && day < 20)) {
+    return 'winter';
+  } else if (month < 5 || (month === 5 && day < 21)) {
     return 'spring';
-  } else if ((month === 5 && day >= 21) || (month >= 6 && month <= 8) || (month === 8 && day < 22)) {
+  } else if (month < 8 || (month === 8 && day < 22)) {
     return 'summer';
-  } else if ((month === 8 && day >= 22) || (month >= 9 && month <= 11) || (month === 11 && day < 21)) {
+  } else if (month < 11 || (month === 11 && day < 21)) {
     return 'autumn';
   } else {
     return 'winter';
@@ -76,6 +79,11 @@ export const isSeasonalTheme = (themeId: string): boolean => {
 };
 
 export const getThemeSeasonality = (themeId: string): string | null => {
+  // Input validation: return null if themeId is falsy or not a string
+  if (!themeId || typeof themeId !== 'string') {
+    return null;
+  }
+  
   if (themeId.includes('spring') || themeId.includes('cherry')) return 'spring';
   if (themeId.includes('summer') || themeId.includes('golden-hour') || themeId.includes('ocean')) return 'summer';
   if (themeId.includes('autumn') || themeId.includes('harvest') || themeId.includes('cozy')) return 'autumn';

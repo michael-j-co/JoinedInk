@@ -1001,7 +1001,7 @@ router.post('/batch/send-reminders', authenticateToken, async (req, res) => {
     // Send reminder emails for each event
     const emailPromises = events.map(async (event) => {
       try {
-        const contributorEmails = [];
+
         
         if (event.eventType === 'INDIVIDUAL_TRIBUTE') {
           // For individual tribute, we need to send to people who haven't contributed yet

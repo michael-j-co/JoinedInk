@@ -1009,9 +1009,18 @@ export const ContributorPage: React.FC = () => {
   const getInitialContent = () => {
     // Always return currentContent which is properly set for each recipient
     // Don't fall back to defaults here as that would override recipient-specific content
+    
+    // Determine contributor name based on global settings
+    const getContributorName = () => {
+      if (useGlobalSettings && globalContributorName) {
+        return globalContributorName;
+      }
+      return sessionInfo?.currentUser?.name || '';
+    };
+    
     return currentContent || {
       recipientName: selectedRecipient?.name || 'Unknown',
-      contributorName: sessionInfo?.currentUser?.name || '',
+      contributorName: getContributorName(),
       text: '',
       formatting: {
         fontFamily: 'Inter, sans-serif',

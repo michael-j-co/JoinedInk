@@ -209,7 +209,12 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   };
 
   return (
-    <div className={`flex flex-col items-center justify-center space-y-3 ${className}`}>
+    <div 
+      className={`flex flex-col items-center justify-center space-y-3 ${className}`}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
       {renderSpinner()}
       
       {message && (

@@ -240,7 +240,17 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={nextAction.onClick}
-                    className={`bg-gradient-to-r ${config.primary} text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 mb-4`}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        nextAction.onClick();
+                      }
+                    }}
+                    type="button"
+                    tabIndex={0}
+                    role="button"
+                    aria-label={nextAction.text}
+                    className={`bg-gradient-to-r ${config.primary} text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
                   >
                     {nextAction.text}
                   </motion.button>
@@ -251,7 +261,17 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.7 }}
                   onClick={onClose}
-                  className={`text-gray-500 hover:text-gray-700 transition-colors font-medium ${nextAction ? 'block' : ''}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onClose();
+                    }
+                  }}
+                  type="button"
+                  tabIndex={0}
+                  role="button"
+                  aria-label={nextAction ? 'Close modal' : 'Continue'}
+                  className={`text-gray-500 hover:text-gray-700 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded px-2 py-1 ${nextAction ? 'block' : ''}`}
                 >
                   {nextAction ? 'Close' : 'Continue'}
                 </motion.button>
@@ -305,7 +325,17 @@ export const SuccessNotification: React.FC<{
               <p className="text-gray-800 font-medium flex-1">{message}</p>
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 ml-2"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onClose();
+                  }
+                }}
+                type="button"
+                tabIndex={0}
+                role="button"
+                aria-label="Close notification"
+                className="text-gray-400 hover:text-gray-600 ml-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded p-1"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
