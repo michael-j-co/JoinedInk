@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { NoteEditor } from '../../components/forms/NoteEditor';
 import { NoteContent, BackgroundTheme } from '../../types';
 import { createSafeHtml } from '../../utils/sanitizeHtml';
+import { PageLoadingSpinner, OverlayLoadingSpinner } from '../../components/common/LoadingSpinner';
+import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import axios from 'axios';
 
 interface Event {
@@ -39,8 +41,8 @@ export const ContributorPage: React.FC = () => {
   const [selectedRecipient, setSelectedRecipient] = useState<Recipient | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [confirmationType, setConfirmationType] = useState<'message-submitted' | 'message-updated'>('message-submitted');
   
 
   
@@ -150,12 +152,38 @@ export const ContributorPage: React.FC = () => {
 
   // Background themes (same as in NoteEditor)
   const BACKGROUND_THEMES: BackgroundTheme[] = [
+    // Core themes
     { id: 'clean', name: 'Clean White', preview: '#ffffff', cssClass: 'bg-white', gradient: '' },
     { id: 'warm', name: 'Warm Cream', preview: '#fef7ed', cssClass: 'bg-orange-50', gradient: '' },
     { id: 'soft', name: 'Soft Rose', preview: '#fdf2f8', cssClass: 'bg-pink-50', gradient: '' },
     { id: 'gentle', name: 'Gentle Blue', preview: '#eff6ff', cssClass: 'bg-blue-50', gradient: '' },
     { id: 'nature', name: 'Nature Green', preview: '#f0fdf4', cssClass: 'bg-green-50', gradient: '' },
     { id: 'sunset', name: 'Sunset Gradient', preview: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-100 to-orange-200' },
+    
+    // Seasonal themes - Spring
+    { id: 'spring-bloom', name: 'Spring Bloom', preview: 'linear-gradient(135deg, #f0fff4 0%, #f5fffa 50%, #fdf8ff 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-green-50 via-mint-50 to-pink-50', pattern: 'subtle-floral' },
+    { id: 'spring-fresh', name: 'Fresh Meadow', preview: '#f7fff7', cssClass: 'bg-green-25', gradient: '' },
+    { id: 'cherry-blossom', name: 'Cherry Blossom', preview: 'linear-gradient(135deg, #fff5f8 0%, #fef7f0 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-pink-25 to-orange-25' },
+    
+    // Seasonal themes - Summer  
+    { id: 'summer-breeze', name: 'Summer Breeze', preview: 'linear-gradient(135deg, #f0f9ff 0%, #fefce8 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-sky-50 to-yellow-50' },
+    { id: 'golden-hour', name: 'Golden Hour', preview: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-amber-50 to-amber-100' },
+    { id: 'ocean-mist', name: 'Ocean Mist', preview: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-sky-50 to-sky-100' },
+    
+    // Seasonal themes - Autumn
+    { id: 'autumn-leaves', name: 'Autumn Leaves', preview: 'linear-gradient(135deg, #fef7ed 0%, #fed7aa 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-50 to-orange-200' },
+    { id: 'harvest-gold', name: 'Harvest Gold', preview: 'linear-gradient(135deg, #fffbeb 0%, #fde68a 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-yellow-50 to-yellow-200' },
+    { id: 'cozy-amber', name: 'Cozy Amber', preview: 'linear-gradient(135deg, #fef7ed 0%, #fb923c 20%, #fbbf24 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-50 via-orange-300 to-yellow-300' },
+    
+    // Seasonal themes - Winter
+    { id: 'winter-frost', name: 'Winter Frost', preview: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-slate-50 to-slate-200' },
+    { id: 'snowy-evening', name: 'Snowy Evening', preview: 'linear-gradient(135deg, #f1f5f9 0%, #ddd6fe 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-slate-100 to-violet-200' },
+    { id: 'candlelight', name: 'Candlelight', preview: 'linear-gradient(135deg, #fef7ed 0%, #f59e0b 10%, #fbbf24 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-50 via-amber-400 to-yellow-300' },
+    
+    // Holiday themes (subtle)
+    { id: 'festive-pine', name: 'Festive Pine', preview: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-green-50 to-green-200' },
+    { id: 'valentine-blush', name: 'Valentine Blush', preview: 'linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-pink-50 to-pink-200' },
+    { id: 'thanksgiving-warmth', name: 'Thanksgiving Warmth', preview: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-50 to-orange-200' },
   ];
 
   // Custom save function for Ctrl+Enter that always goes to next recipient in order
@@ -386,17 +414,9 @@ export const ContributorPage: React.FC = () => {
         } : null);
       }
       
-      // Show success message
-      const message = isUpdate 
-        ? `Your message for ${selectedRecipient.name} has been updated successfully!`
-        : `Your message for ${selectedRecipient.name} has been submitted successfully!`;
-      setSuccessMessage(message);
-      setShowSuccess(true);
-      
-      // Auto-hide success message after 4 seconds
-      setTimeout(() => {
-        setShowSuccess(false);
-      }, 4000);
+      // Show beautiful confirmation modal
+      setConfirmationType(isUpdate ? 'message-updated' : 'message-submitted');
+      setShowConfirmation(true);
       
       // Auto-navigate to next recipient with smooth animations
       if (sessionInfo.event.eventType === 'CIRCLE_NOTES') {
@@ -430,18 +450,13 @@ export const ContributorPage: React.FC = () => {
               }, 300);
             }, 1500);
           } else {
-            // All recipients have messages, show completion animation then go back to selector
+            // All recipients have messages, show beautiful completion confirmation
             setTimeout(() => {
-              setShowCompletionAnimation(true);
+              setConfirmationType('message-submitted');
+              setShowConfirmation(false); // Close current confirmation
               setTimeout(() => {
-                setIsTransitioning(true);
-                setTimeout(() => {
-        setSelectedRecipient(null);
-                  setCurrentContent(null);
-                  setIsTransitioning(false);
-                  setShowCompletionAnimation(false);
-                }, 300);
-              }, 1500); // Show completion animation for 1.5s
+                setShowCompletionAnimation(true);
+              }, 300);
             }, 1000);
           }
         }
@@ -647,15 +662,7 @@ export const ContributorPage: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-300 rounded w-64 mb-4"></div>
-          <div className="h-4 bg-gray-300 rounded w-48 mb-2"></div>
-          <div className="h-4 bg-gray-300 rounded w-32"></div>
-        </div>
-      </div>
-    );
+    return <PageLoadingSpinner message="Loading your collaboration session..." />;
   }
 
   if (error) {
@@ -1101,44 +1108,41 @@ export const ContributorPage: React.FC = () => {
 
       
 
-      {/* Completion Animation Overlay */}
-      {showCompletionAnimation && (
-        <div className="fixed inset-0 bg-white bg-opacity-95 flex items-center justify-center z-40">
-          <div className="text-center max-w-md mx-auto p-8 animate-pulse">
-            <div className="w-24 h-24 bg-gradient-to-r from-green-400 to-green-600 rounded-full flex items-center justify-center mx-auto mb-6 transform transition-transform duration-1000 hover:scale-110">
-              <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-4 transform transition-all duration-700 ease-out">
-              All Messages Complete! 🎉
-            </h2>
-            <p className="text-lg text-gray-600 transform transition-all duration-700 ease-out delay-200">
-              You've sent heartfelt messages to everyone in the circle.
-            </p>
-            <div className="mt-6 flex justify-center">
-              <div className="flex space-x-1">
-                {[...Array(3)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-2 h-2 bg-rose-400 rounded-full animate-bounce"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Beautiful Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmation}
+        onClose={() => setShowConfirmation(false)}
+        type={confirmationType}
+        recipientName={selectedRecipient?.name}
+        eventTitle={sessionInfo?.event.title}
+        autoClose={true}
+        autoCloseDelay={4000}
+      />
+
+      {/* Circle Completion Modal */}
+      <ConfirmationModal
+        isOpen={showCompletionAnimation}
+        onClose={() => {
+          setShowCompletionAnimation(false);
+          setSelectedRecipient(null);
+          setCurrentContent(null);
+        }}
+        type="circle-complete"
+        eventTitle={sessionInfo?.event.title}
+        nextAction={{
+          text: "View All Messages",
+          onClick: () => {
+            setShowCompletionAnimation(false);
+            setSelectedRecipient(null);
+            setCurrentContent(null);
+          }
+        }}
+        autoClose={false}
+      />
 
       {/* Transition Overlay */}
       {isTransitioning && (
-        <div className="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-30">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-rose-200 border-t-rose-500 rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600 font-medium">Loading next message...</p>
-          </div>
-        </div>
+        <OverlayLoadingSpinner message="Loading next message..." />
       )}
 
       {/* Name Settings Panel - Now as a separate floating card when needed */}

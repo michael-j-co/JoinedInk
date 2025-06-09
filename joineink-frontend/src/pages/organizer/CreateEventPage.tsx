@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { DateTimePicker } from '../../components/ui/DateTimePicker';
+import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import axios from 'axios';
 
 interface EventFormData {
@@ -21,6 +22,7 @@ export const CreateEventPage: React.FC = () => {
   const [error, setError] = useState('');
   const [createdEvent, setCreatedEvent] = useState<any>(null);
   const [copiedStates, setCopiedStates] = useState<{[key: string]: boolean}>({});
+  const [showEventCreatedModal, setShowEventCreatedModal] = useState(false);
   const [formData, setFormData] = useState<EventFormData>({
     eventType: '',
     title: '',
@@ -101,7 +103,7 @@ export const CreateEventPage: React.FC = () => {
       const response = await axios.post('/api/events', eventData);
       setCreatedEvent(response.data);
       setCopiedStates({}); // Reset copied states for the success step
-      setCurrentStep(4);
+      setShowEventCreatedModal(true);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create event');
     } finally {
@@ -471,6 +473,23 @@ export const CreateEventPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Beautiful Event Created Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showEventCreatedModal}
+          onClose={() => setShowEventCreatedModal(false)}
+          type="event-created"
+          title="🎉 Event Created!"
+          eventTitle={formData.title}
+          nextAction={{
+            text: "View Event Details",
+            onClick: () => {
+              setShowEventCreatedModal(false);
+              setCurrentStep(4);
+            }
+          }}
+          autoClose={false}
+        />
       </div>
     </div>
   );
