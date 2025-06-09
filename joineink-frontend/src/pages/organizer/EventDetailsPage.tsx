@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { PageLoadingSpinner, ContentLoadingSpinner } from '../../components/common/LoadingSpinner';
+import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import axios from 'axios';
 
 interface Contribution {
@@ -76,6 +78,8 @@ export const EventDetailsPage: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSendKeepsakeConfirm, setShowSendKeepsakeConfirm] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showKeepsakeSuccessModal, setShowKeepsakeSuccessModal] = useState(false);
+  const [keepsakeResults, setKeepsakeResults] = useState<any>(null);
 
   useEffect(() => {
     if (eventId) {
@@ -178,13 +182,9 @@ export const EventDetailsPage: React.FC = () => {
       
       const { emailsSent, totalRecipients, errors, eventClosed } = response.data;
       
-      if (errors && errors.length > 0) {
-        alert(`⚠️ Partial Success:\n✅ ${emailsSent} emails sent successfully\n❌ ${errors.length} emails failed\n\nEvent remains OPEN so you can retry sending. Check your email configuration and try again.`);
-      } else if (eventClosed) {
-        alert(`🎉 Event ended successfully!\n\nKeepsake book emails have been sent to all ${emailsSent} recipients. The event is now closed and recipients will receive beautiful personalized emails with links to view their compiled keepsake books.`);
-      } else {
-        alert(`📧 Emails sent successfully!\n\n${emailsSent} keepsake book emails were sent. Event remains open.`);
-      }
+      // Store results and show beautiful confirmation modal
+      setKeepsakeResults(response.data);
+      setShowKeepsakeSuccessModal(true);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to send keepsake books');
     } finally {
@@ -262,24 +262,7 @@ export const EventDetailsPage: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-neutral-cream to-neutral-ivory p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-neutral-warm rounded w-48 mb-6"></div>
-            <div className="bg-surface-paper rounded-xl p-8 mb-6">
-              <div className="h-6 bg-neutral-warm rounded w-64 mb-4"></div>
-              <div className="h-4 bg-neutral-warm rounded w-48 mb-2"></div>
-              <div className="h-4 bg-neutral-warm rounded w-32"></div>
-            </div>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="bg-surface-paper rounded-xl p-6 h-40"></div>
-              <div className="bg-surface-paper rounded-xl p-6 h-40"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoadingSpinner message="Loading event details..." />;
   }
 
   if (error) {
@@ -617,10 +600,7 @@ export const EventDetailsPage: React.FC = () => {
               
               <div className="p-6">
                 {contributionsLoading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto"></div>
-                    <p className="text-text-secondary mt-2">Loading contributions...</p>
-                  </div>
+                  <ContentLoadingSpinner message="Loading contributions..." />
                 ) : contributions.length === 0 ? (
                   <div className="text-center py-8">
                     <p className="text-text-secondary">No contributions found.</p>
@@ -763,6 +743,31 @@ export const EventDetailsPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Keepsake Success Confirmation Modal */}
+        <ConfirmationModal
+          isOpen={showKeepsakeSuccessModal}
+          onClose={() => setShowKeepsakeSuccessModal(false)}
+          type="keepsake-sent"
+          title={keepsakeResults?.eventClosed ? "🎉 Event Complete!" : "📧 Keepsakes Sent!"}
+          message={
+            keepsakeResults?.errors && keepsakeResults.errors.length > 0
+              ? `${keepsakeResults.emailsSent} emails sent successfully, but ${keepsakeResults.errors.length} failed. Event remains open so you can retry sending.`
+              : keepsakeResults?.eventClosed
+              ? `Beautiful keepsake books have been sent to all ${keepsakeResults.emailsSent} recipients! The event is now closed and recipients will receive personalized emails with links to their treasured memories.`
+              : `${keepsakeResults?.emailsSent} keepsake book emails were sent successfully! Event remains open.`
+          }
+          eventTitle={event?.title}
+          nextAction={{
+            text: "Back to Dashboard",
+            onClick: () => {
+              setShowKeepsakeSuccessModal(false);
+              navigate('/dashboard');
+            }
+          }}
+          autoClose={false}
+          theme={keepsakeResults?.errors && keepsakeResults.errors.length > 0 ? 'celebration' : 'book'}
+        />
       </div>
     </div>
   );

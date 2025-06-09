@@ -43,6 +43,19 @@ module.exports = {
           card: '#fbfaf7',
           overlay: '#f7f5f2',
           border: '#ede9e4',
+        },
+        // Seasonal color extensions
+        green: {
+          25: '#f7fff7', // Ultra light green for seasonal themes
+        },
+        pink: {
+          25: '#fff5f8', // Ultra light pink for seasonal themes
+        },
+        orange: {
+          25: '#fef7f0', // Ultra light orange for seasonal themes
+        },
+        mint: {
+          50: '#f0fdf4', // Mint green for gradients
         }
       },
       fontFamily: {

@@ -24,8 +24,8 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
   );
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState({
-    hours: selectedDate ? (selectedDate.getHours() === 0 ? 12 : selectedDate.getHours() > 12 ? selectedDate.getHours() - 12 : selectedDate.getHours()) : 12,
-    minutes: selectedDate ? selectedDate.getMinutes() : 0,
+    hours: selectedDate ? (selectedDate.getHours() === 0 ? 12 : selectedDate.getHours() > 12 ? selectedDate.getHours() - 12 : selectedDate.getHours()) : 11,
+    minutes: selectedDate ? selectedDate.getMinutes() : 59,
     period: selectedDate ? (selectedDate.getHours() >= 12 ? 'PM' : 'AM') : 'PM'
   });
 

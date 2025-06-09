@@ -18,6 +18,7 @@ import { DrawingCanvas } from './DrawingCanvas';
 import { BackgroundSelector } from './BackgroundSelector';
 import { NotePreview } from './NotePreview';
 import { generateNonOverlappingPosition } from '../../utils/positioning';
+import { ButtonLoadingSpinner } from '../common/LoadingSpinner';
 
 interface NoteEditorProps {
   recipientName: string;
@@ -27,6 +28,7 @@ interface NoteEditorProps {
   onPreview: (content: NoteContent) => void;
   onContentChange?: (content: NoteContent) => void;
   isSubmitting?: boolean;
+  isUpdate?: boolean;
 }
 
 const FONT_OPTIONS: FontOption[] = [
@@ -39,12 +41,38 @@ const FONT_OPTIONS: FontOption[] = [
 ];
 
 const BACKGROUND_THEMES: BackgroundTheme[] = [
+  // Core themes
   { id: 'clean', name: 'Clean White', preview: '#ffffff', cssClass: 'bg-white', gradient: '' },
   { id: 'warm', name: 'Warm Cream', preview: '#fef7ed', cssClass: 'bg-orange-50', gradient: '' },
   { id: 'soft', name: 'Soft Rose', preview: '#fdf2f8', cssClass: 'bg-pink-50', gradient: '' },
   { id: 'gentle', name: 'Gentle Blue', preview: '#eff6ff', cssClass: 'bg-blue-50', gradient: '' },
   { id: 'nature', name: 'Nature Green', preview: '#f0fdf4', cssClass: 'bg-green-50', gradient: '' },
   { id: 'sunset', name: 'Sunset Gradient', preview: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-100 to-orange-200' },
+  
+  // Seasonal themes - Spring
+  { id: 'spring-bloom', name: 'Spring Bloom', preview: 'linear-gradient(135deg, #f0fff4 0%, #f5fffa 50%, #fdf8ff 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-green-50 via-mint-50 to-pink-50', pattern: 'subtle-floral' },
+  { id: 'spring-fresh', name: 'Fresh Meadow', preview: '#f7fff7', cssClass: 'bg-green-25', gradient: '' },
+  { id: 'cherry-blossom', name: 'Cherry Blossom', preview: 'linear-gradient(135deg, #fff5f8 0%, #fef7f0 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-pink-25 to-orange-25' },
+  
+  // Seasonal themes - Summer  
+  { id: 'summer-breeze', name: 'Summer Breeze', preview: 'linear-gradient(135deg, #f0f9ff 0%, #fefce8 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-sky-50 to-yellow-50' },
+  { id: 'golden-hour', name: 'Golden Hour', preview: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-amber-50 to-amber-100' },
+  { id: 'ocean-mist', name: 'Ocean Mist', preview: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-sky-50 to-sky-100' },
+  
+  // Seasonal themes - Autumn
+  { id: 'autumn-leaves', name: 'Autumn Leaves', preview: 'linear-gradient(135deg, #fef7ed 0%, #fed7aa 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-50 to-orange-200' },
+  { id: 'harvest-gold', name: 'Harvest Gold', preview: 'linear-gradient(135deg, #fffbeb 0%, #fde68a 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-yellow-50 to-yellow-200' },
+  { id: 'cozy-amber', name: 'Cozy Amber', preview: 'linear-gradient(135deg, #fef7ed 0%, #fb923c 20%, #fbbf24 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-50 via-orange-300 to-yellow-300' },
+  
+  // Seasonal themes - Winter
+  { id: 'winter-frost', name: 'Winter Frost', preview: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-slate-50 to-slate-200' },
+  { id: 'snowy-evening', name: 'Snowy Evening', preview: 'linear-gradient(135deg, #f1f5f9 0%, #ddd6fe 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-slate-100 to-violet-200' },
+  { id: 'candlelight', name: 'Candlelight', preview: 'linear-gradient(135deg, #fef7ed 0%, #f59e0b 10%, #fbbf24 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-50 via-amber-400 to-yellow-300' },
+  
+  // Holiday themes (subtle)
+  { id: 'festive-pine', name: 'Festive Pine', preview: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-green-50 to-green-200' },
+  { id: 'valentine-blush', name: 'Valentine Blush', preview: 'linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-pink-50 to-pink-200' },
+  { id: 'thanksgiving-warmth', name: 'Thanksgiving Warmth', preview: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-50 to-orange-200' },
 ];
 
 export const NoteEditor: React.FC<NoteEditorProps> = ({
@@ -54,7 +82,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   onSave,
   onPreview,
   onContentChange,
-  isSubmitting = false
+  isSubmitting = false,
+  isUpdate = false
 }) => {
   const [content, setContent] = useState<NoteContent>({
     recipientName,
@@ -182,14 +211,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }
       }
     }
-  }, []);
-
-  // Handle contributor name change
-  const handleContributorNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setContent(prev => ({
-      ...prev,
-      contributorName: e.target.value
-    }));
   }, []);
 
   // Handle rich text formatting
@@ -482,7 +503,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   return (
     <div className="max-w-6xl mx-auto p-6">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Write a Message for {recipientName}
         </h1>
@@ -490,7 +511,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       </div>
 
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-gray-200 mb-4">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
           {[
             { id: 'write', name: 'Write', icon: PencilSquareIcon },
@@ -516,251 +537,272 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       <div ref={containerRef} className="flex flex-col lg:flex-row gap-4 relative">
         {/* Editor Panel */}
-        <div className="space-y-6 lg:min-w-0" style={{ width: isLargeScreen ? `${100 - previewWidth}%` : '100%' }}>
-          {activeTab === 'write' && (
-            <div className="space-y-4">
-              {/* Contributor Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Your Name (Optional - leave blank for anonymous)
-                </label>
-                <input
-                  type="text"
-                  value={content.contributorName}
-                  onChange={handleContributorNameChange}
-                  placeholder="Enter your name or leave blank"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
-                />
-              </div>
-
-              {/* Font Selection */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Font</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {FONT_OPTIONS.map((font) => (
-                    <button
-                      key={font.name}
-                      onClick={() => handleFontChange(font.family)}
-                      className={`p-2 text-center border rounded-md hover:bg-gray-50 ${
-                        content.formatting.fontFamily === font.family
-                          ? 'border-rose-500 bg-rose-50'
-                          : 'border-gray-300'
-                      }`}
-                      style={{ fontFamily: font.family }}
-                    >
-                      <div className="text-lg">{font.preview}</div>
-                      <div className="text-xs text-gray-600">{font.name}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Formatting Controls */}
-              <div className="flex space-x-2">
-                <button
-                  type="button"
-                  onClick={toggleBold}
-                  className="px-3 py-1 border rounded-md bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  title="Bold (Ctrl+B)"
-                >
-                  <strong>B</strong>
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleItalic}
-                  className="px-3 py-1 border rounded-md bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  title="Italic (Ctrl+I)"
-                >
-                  <em>I</em>
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleUnderline}
-                  className="px-3 py-1 border rounded-md bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  title="Underline (Ctrl+U)"
-                >
-                  <span className="underline">U</span>
-                </button>
-              </div>
-
-              {/* Rich Text Editor */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Your Message
-                </label>
-                <div
-                  ref={richTextEditorRef}
-                  contentEditable
-                  onInput={handleTextChange}
-                  onKeyDown={handleKeyDown}
-                  onFocus={handleFocus}
-                  className="w-full min-h-[300px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 resize-none"
-                  style={{
-                    fontFamily: content.formatting.fontFamily,
-                    direction: 'ltr',
-                    textAlign: 'left'
-                  }}
-                  data-placeholder="Write your heartfelt message here..."
-                  suppressContentEditableWarning={true}
-                />
-                <style>{`
-                  [contenteditable]:empty:before {
-                    content: attr(data-placeholder);
-                    color: #9CA3AF;
-                    pointer-events: none;
-                  }
-                  [contenteditable]:focus:before {
-                    display: none;
-                  }
-                `}</style>
-                <div className="mt-2 text-sm text-gray-500 flex justify-between">
-                  <span>{content.wordCount} words</span>
-                  <span>{content.characterCount} characters</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'media' && (
-            <div className="space-y-6">
-              {/* Image Upload */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-4">Add Images</label>
-                <div
-                  {...getRootProps()}
-                  className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                    isDragActive
-                      ? 'border-rose-500 bg-rose-50'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                >
-                  <input {...getInputProps()} />
-                  <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="mt-2 text-sm text-gray-600">
-                    {isDragActive
-                      ? 'Drop the images here...'
-                      : 'Drag & drop images here, or click to select'}
-                  </p>
-                  <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
-                </div>
-              </div>
-
-              {/* Media Action Buttons */}
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={() => setShowGifPicker(true)}
-                  className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  <GifIcon className="h-6 w-6 text-gray-600" />
-                  <span>Add GIF</span>
-                </button>
-                <button
-                  onClick={() => setShowStickerPicker(true)}
-                  className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  <FaceSmileIcon className="h-6 w-6 text-gray-600" />
-                  <span>Add Sticker</span>
-                </button>
-              </div>
-
-              {/* Drawing Canvas Button */}
-              <button
-                onClick={() => setShowDrawingCanvas(true)}
-                className="w-full flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                <PaintBrushIcon className="h-6 w-6 text-gray-600" />
-                <span>Create Drawing</span>
-              </button>
-
-              {/* Media Preview */}
-              {(content.media.length > 0 || content.drawings.length > 0) && (
+        <div className="space-y-4 lg:min-w-0" style={{ width: isLargeScreen ? `${100 - previewWidth}%` : '100%' }}>
+          {/* Content Tabs */}
+          <div className="min-h-[400px] max-h-[600px] overflow-y-auto">
+            {activeTab === 'write' && (
+              <div className="space-y-4">
+                {/* Font Selection */}
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">Added Media</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {content.media.map((item) => (
-                      <div key={item.id} className="relative group">
-                        <img
-                          src={item.url}
-                          alt={item.alt}
-                          className="w-full h-24 object-cover rounded-lg"
-                        />
-                        <button
-                          onClick={() => removeMediaItem(item.id)}
-                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                    {content.drawings.map((drawing) => (
-                      <div key={drawing.id} className="relative group">
-                        <img
-                          src={drawing.dataUrl}
-                          alt="Drawing"
-                          className="w-full h-24 object-cover rounded-lg"
-                        />
-                        <button
-                          onClick={() => removeDrawing(drawing.id)}
-                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          ×
-                        </button>
-                      </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Font</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {FONT_OPTIONS.map((font) => (
+                      <button
+                        key={font.name}
+                        onClick={() => handleFontChange(font.family)}
+                        className={`p-2 text-center border rounded-md hover:bg-gray-50 ${
+                          content.formatting.fontFamily === font.family
+                            ? 'border-rose-500 bg-rose-50'
+                            : 'border-gray-300'
+                        }`}
+                        style={{ fontFamily: font.family }}
+                      >
+                        <div className="text-lg">{font.preview}</div>
+                        <div className="text-xs text-gray-600">{font.name}</div>
+                      </button>
                     ))}
                   </div>
                 </div>
-              )}
-            </div>
-          )}
 
-          {activeTab === 'signature' && (
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-4">Add Your Signature</label>
-                
-                {/* Signature Mode Toggle */}
-                <div className="flex space-x-4 mb-4">
+                {/* Formatting Controls */}
+                <div className="flex space-x-2">
                   <button
-                    onClick={() => setSignatureMode('draw')}
-                    className={`px-4 py-2 rounded-md ${
-                      signatureMode === 'draw'
-                        ? 'bg-rose-500 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    type="button"
+                    onClick={toggleBold}
+                    className="px-3 py-1 border rounded-md bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    title="Bold (Ctrl+B)"
                   >
-                    Draw Signature
+                    <strong>B</strong>
                   </button>
                   <button
-                    onClick={() => setSignatureMode('type')}
-                    className={`px-4 py-2 rounded-md ${
-                      signatureMode === 'type'
-                        ? 'bg-rose-500 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    type="button"
+                    onClick={toggleItalic}
+                    className="px-3 py-1 border rounded-md bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    title="Italic (Ctrl+I)"
                   >
-                    Type Signature
+                    <em>I</em>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleUnderline}
+                    className="px-3 py-1 border rounded-md bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    title="Underline (Ctrl+U)"
+                  >
+                    <span className="underline">U</span>
                   </button>
                 </div>
 
-                {signatureMode === 'draw' ? (
-                  <div className="space-y-4">
-                    <div className="border border-gray-300 rounded-lg">
-                      <SignatureCanvas
-                        ref={signatureCanvasRef}
-                        canvasProps={{
-                          width: 400,
-                          height: 150,
-                          className: 'rounded-lg'
-                        }}
-                      />
+                {/* Rich Text Editor */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Your Message
+                  </label>
+                  <div
+                    ref={richTextEditorRef}
+                    contentEditable
+                    onInput={handleTextChange}
+                    onKeyDown={handleKeyDown}
+                    onFocus={handleFocus}
+                    className="w-full min-h-[300px] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 resize-none"
+                    style={{
+                      fontFamily: content.formatting.fontFamily,
+                      direction: 'ltr',
+                      textAlign: 'left'
+                    }}
+                    data-placeholder="Write your heartfelt message here..."
+                    suppressContentEditableWarning={true}
+                  />
+                  <style>{`
+                    [contenteditable]:empty:before {
+                      content: attr(data-placeholder);
+                      color: #9CA3AF;
+                      pointer-events: none;
+                    }
+                    [contenteditable]:focus:before {
+                      display: none;
+                    }
+                  `}</style>
+                  <div className="mt-2 text-sm text-gray-500 flex justify-between">
+                    <span>{content.wordCount} words</span>
+                    <span>{content.characterCount} characters</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'media' && (
+              <div className="space-y-6">
+                {/* Image Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-4">Add Images</label>
+                  <div
+                    {...getRootProps()}
+                    className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                      isDragActive
+                        ? 'border-rose-500 bg-rose-50'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <input {...getInputProps()} />
+                    <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400" />
+                    <p className="mt-2 text-sm text-gray-600">
+                      {isDragActive
+                        ? 'Drop the images here...'
+                        : 'Drag & drop images here, or click to select'}
+                    </p>
+                    <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
+                  </div>
+                </div>
+
+                {/* Media Action Buttons */}
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setShowGifPicker(true)}
+                    className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    <GifIcon className="h-6 w-6 text-gray-600" />
+                    <span>Add GIF</span>
+                  </button>
+                  <button
+                    onClick={() => setShowStickerPicker(true)}
+                    className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    <FaceSmileIcon className="h-6 w-6 text-gray-600" />
+                    <span>Add Sticker</span>
+                  </button>
+                </div>
+
+                {/* Drawing Canvas Button */}
+                <button
+                  onClick={() => setShowDrawingCanvas(true)}
+                  className="w-full flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  <PaintBrushIcon className="h-6 w-6 text-gray-600" />
+                  <span>Create Drawing</span>
+                </button>
+
+                {/* Media Preview */}
+                {(content.media.length > 0 || content.drawings.length > 0) && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">Added Media</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {content.media.map((item) => (
+                        <div key={item.id} className="relative group">
+                          <img
+                            src={item.url}
+                            alt={item.alt}
+                            className="w-full h-24 object-cover rounded-lg"
+                          />
+                          <button
+                            onClick={() => removeMediaItem(item.id)}
+                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                      {content.drawings.map((drawing) => (
+                        <div key={drawing.id} className="relative group">
+                          <img
+                            src={drawing.dataUrl}
+                            alt="Drawing"
+                            className="w-full h-24 object-cover rounded-lg"
+                          />
+                          <button
+                            onClick={() => removeDrawing(drawing.id)}
+                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => signatureCanvasRef.current?.clear()}
-                        className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
-                      >
-                        Clear
-                      </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'signature' && (
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-4">Add Your Signature</label>
+                  
+                  {/* Signature Mode Toggle */}
+                  <div className="flex space-x-4 mb-4">
+                    <button
+                      onClick={() => setSignatureMode('draw')}
+                      className={`px-4 py-2 rounded-md ${
+                        signatureMode === 'draw'
+                          ? 'bg-rose-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Draw Signature
+                    </button>
+                    <button
+                      onClick={() => setSignatureMode('type')}
+                      className={`px-4 py-2 rounded-md ${
+                        signatureMode === 'type'
+                          ? 'bg-rose-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Type Signature
+                    </button>
+                  </div>
+
+                  {signatureMode === 'draw' ? (
+                    <div className="space-y-4">
+                      <div className="border border-gray-300 rounded-lg">
+                        <SignatureCanvas
+                          ref={signatureCanvasRef}
+                          canvasProps={{
+                            width: 400,
+                            height: 150,
+                            className: 'rounded-lg'
+                          }}
+                        />
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => signatureCanvasRef.current?.clear()}
+                          className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                        >
+                          Clear
+                        </button>
+                        <button
+                          onClick={handleSignatureSave}
+                          className="px-4 py-2 text-sm bg-rose-500 text-white rounded-md hover:bg-rose-600"
+                        >
+                          Save Signature
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Signature Font
+                        </label>
+                        <select
+                          value={signatureFont}
+                          onChange={(e) => setSignatureFont(e.target.value)}
+                          className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary custom-select"
+                        >
+                          <option value="Dancing Script, cursive">Dancing Script</option>
+                          <option value="Pacifico, cursive">Pacifico</option>
+                          <option value="Great Vibes, cursive">Great Vibes</option>
+                          <option value="Sacramento, cursive">Sacramento</option>
+                        </select>
+                      </div>
+                      <input
+                        type="text"
+                        value={typedSignature}
+                        onChange={(e) => setTypedSignature(e.target.value)}
+                        placeholder="Type your signature"
+                        className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary custom-input"
+                        style={{ fontFamily: signatureFont, fontSize: '24px' }}
+                      />
                       <button
                         onClick={handleSignatureSave}
                         className="px-4 py-2 text-sm bg-rose-500 text-white rounded-md hover:bg-rose-600"
@@ -768,77 +810,78 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                         Save Signature
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Signature Font
-                      </label>
-                      <select
-                        value={signatureFont}
-                        onChange={(e) => setSignatureFont(e.target.value)}
-                        className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary custom-select"
+                  )}
+
+                  {/* Current Signature Preview */}
+                  {content.signature && (
+                    <div className="mt-6 p-4 border border-gray-200 rounded-lg">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Current Signature:</h4>
+                      {content.signature.type === 'drawn' ? (
+                        <img src={content.signature.data} alt="Signature" className="max-h-20" />
+                      ) : (
+                        <div
+                          style={{ 
+                            fontFamily: content.signature.font || signatureFont,
+                            fontSize: '24px'
+                          }}
+                          className="text-gray-800"
+                        >
+                          {content.signature.data}
+                        </div>
+                      )}
+                      <button
+                        onClick={clearSignature}
+                        className="mt-2 text-sm text-red-600 hover:text-red-800"
                       >
-                        <option value="Dancing Script, cursive">Dancing Script</option>
-                        <option value="Pacifico, cursive">Pacifico</option>
-                        <option value="Great Vibes, cursive">Great Vibes</option>
-                        <option value="Sacramento, cursive">Sacramento</option>
-                      </select>
+                        Remove Signature
+                      </button>
                     </div>
-                    <input
-                      type="text"
-                      value={typedSignature}
-                      onChange={(e) => setTypedSignature(e.target.value)}
-                      placeholder="Type your signature"
-                      className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary custom-input"
-                      style={{ fontFamily: signatureFont, fontSize: '24px' }}
-                    />
-                    <button
-                      onClick={handleSignatureSave}
-                      className="px-4 py-2 text-sm bg-rose-500 text-white rounded-md hover:bg-rose-600"
-                    >
-                      Save Signature
-                    </button>
-                  </div>
-                )}
-
-                {/* Current Signature Preview */}
-                {content.signature && (
-                  <div className="mt-6 p-4 border border-gray-200 rounded-lg">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Current Signature:</h4>
-                    {content.signature.type === 'drawn' ? (
-                      <img src={content.signature.data} alt="Signature" className="max-h-20" />
-                    ) : (
-                      <div
-                        style={{ 
-                          fontFamily: content.signature.font || signatureFont,
-                          fontSize: '24px'
-                        }}
-                        className="text-gray-800"
-                      >
-                        {content.signature.data}
-                      </div>
-                    )}
-                    <button
-                      onClick={clearSignature}
-                      className="mt-2 text-sm text-red-600 hover:text-red-800"
-                    >
-                      Remove Signature
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === 'theme' && (
-            <BackgroundSelector
-              themes={BACKGROUND_THEMES}
-              selectedTheme={content.backgroundColor}
-              onThemeChange={handleThemeChange}
-            />
-          )}
+            {activeTab === 'theme' && (
+              <div>
+                <BackgroundSelector
+                  themes={BACKGROUND_THEMES}
+                  selectedTheme={content.backgroundColor}
+                  onThemeChange={handleThemeChange}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Sticky Action Buttons - Always visible at bottom of editor panel */}
+          <div className="sticky bottom-0 bg-white border-t border-gray-200 pt-4 mt-4">
+            <div className="flex justify-between items-center">
+              <button
+                onClick={handlePreview}
+                className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+              >
+                <EyeIcon className="h-5 w-5" />
+                <span>Full Preview</span>
+              </button>
+              
+              <button
+                onClick={handleSave}
+                disabled={isSubmitting || !content.text.trim()}
+                className="px-8 py-2 bg-rose-500 text-white rounded-md hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <ButtonLoadingSpinner />
+                    <span>{isUpdate ? 'Updating...' : 'Submitting...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <CloudArrowUpIcon className="h-5 w-5" />
+                    <span>{isUpdate ? 'Update Message' : 'Submit Message'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Resizable Divider - Only on desktop */}
@@ -860,7 +903,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 </p>
               )}
             </div>
-            <div className="h-96 overflow-y-auto">
+            <div className="h-80 overflow-y-auto">
               <NotePreview 
                 content={content} 
                 theme={currentTheme}
@@ -871,35 +914,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="mt-8 flex justify-between items-center">
-        <button
-          onClick={handlePreview}
-          className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
-        >
-          <EyeIcon className="h-5 w-5" />
-          <span>Full Preview</span>
-        </button>
-        
-        <button
-          onClick={handleSave}
-          disabled={isSubmitting || !content.text.trim()}
-          className="px-8 py-2 bg-rose-500 text-white rounded-md hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-        >
-          {isSubmitting ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              <span>Submitting...</span>
-            </>
-          ) : (
-            <>
-              <CloudArrowUpIcon className="h-5 w-5" />
-              <span>Submit Message</span>
-            </>
-          )}
-        </button>
       </div>
 
       {/* Modals */}

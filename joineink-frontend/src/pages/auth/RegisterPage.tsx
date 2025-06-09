@@ -4,7 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export const RegisterPage: React.FC = () => {
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: '',
     confirmPassword: ''
@@ -27,8 +28,13 @@ export const RegisterPage: React.FC = () => {
     e.preventDefault();
     
     // Validation
-    if (!formData.name.trim()) {
-      setError('Name is required');
+    if (!formData.firstName.trim()) {
+      setError('First name is required');
+      return;
+    }
+    
+    if (!formData.lastName.trim()) {
+      setError('Last name is required');
       return;
     }
     
@@ -49,7 +55,8 @@ export const RegisterPage: React.FC = () => {
 
     setLoading(true);
     try {
-      await register(formData.email, formData.password, formData.name);
+      const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
+      await register(formData.email, formData.password, fullName);
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.message);
@@ -73,20 +80,38 @@ export const RegisterPage: React.FC = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-2">
-              Full Name
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-colors bg-surface-paper text-text-primary"
-              placeholder="Enter your full name"
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="firstName" className="block text-sm font-medium text-text-secondary mb-2">
+                First Name
+              </label>
+              <input
+                type="text"
+                id="firstName"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-colors bg-surface-paper text-text-primary"
+                placeholder="First name"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="lastName" className="block text-sm font-medium text-text-secondary mb-2">
+                Last Name
+              </label>
+              <input
+                type="text"
+                id="lastName"
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                className="w-full px-4 py-3 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-colors bg-surface-paper text-text-primary"
+                placeholder="Last name"
+                required
+              />
+            </div>
           </div>
 
           <div>

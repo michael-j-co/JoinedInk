@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { GiphyFetch } from '@giphy/js-fetch-api';
 import { GiphyGif } from '../../types';
+import { ContentLoadingSpinner } from '../common/LoadingSpinner';
 
 interface GifPickerProps {
   onSelect: (gif: any) => void;
@@ -250,9 +251,7 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onSelect, onClose }) => {
         {/* Content */}
         <div className="p-4 overflow-y-auto max-h-96">
           {loading && (
-            <div className="flex justify-center items-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
-            </div>
+            <ContentLoadingSpinner message="Loading GIFs..." />
           )}
 
           {error && gifs.length === 0 && (

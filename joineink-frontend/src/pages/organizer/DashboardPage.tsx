@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { PageLoadingSpinner } from '../../components/common/LoadingSpinner';
+import { SuccessNotification } from '../../components/ui/ConfirmationModal';
 import axios from 'axios';
 
 interface Event {
@@ -37,6 +39,16 @@ export const DashboardPage: React.FC = () => {
   const [showLinksModal, setShowLinksModal] = useState(false);
   const [contributorLinks, setContributorLinks] = useState<any>({});
   const [copiedStates, setCopiedStates] = useState<{[key: string]: boolean}>({});
+
+  // Batch actions state
+  const [selectedEventIds, setSelectedEventIds] = useState<string[]>([]);
+  const [showBatchExtendModal, setShowBatchExtendModal] = useState(false);
+  const [showBatchReminderModal, setShowBatchReminderModal] = useState(false);
+  const [batchDeadline, setBatchDeadline] = useState('');
+  const [reminderMessage, setReminderMessage] = useState('');
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [showSuccessNotification, setShowSuccessNotification] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -133,26 +145,91 @@ export const DashboardPage: React.FC = () => {
   const totalContributions = events.reduce((sum, event) => sum + event._count.contributions, 0);
   const completedEvents = events.filter(e => e.status === 'CLOSED' || isEventExpired(e.deadline)).length;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-neutral-cream to-neutral-ivory p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-neutral-warm rounded w-48 mb-6"></div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="bg-surface-paper p-6 rounded-xl h-24"></div>
-              ))}
-            </div>
-            <div className="space-y-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="bg-surface-paper p-6 rounded-xl h-32"></div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+  // Batch actions functions
+  const toggleEventSelection = (eventId: string) => {
+    setSelectedEventIds(prev => 
+      prev.includes(eventId) 
+        ? prev.filter(id => id !== eventId)
+        : [...prev, eventId]
     );
+  };
+
+  const selectAllOwnedEvents = () => {
+    const ownedOpenEventIds = events
+      .filter(e => e.userRole === 'organizer' && e.status === 'OPEN' && !isEventExpired(e.deadline))
+      .map(e => e.id);
+    setSelectedEventIds(ownedOpenEventIds);
+  };
+
+  const clearSelection = () => {
+    setSelectedEventIds([]);
+  };
+
+  const handleBatchExtendDeadline = async () => {
+    if (!batchDeadline || selectedEventIds.length === 0) return;
+
+    try {
+      setBatchLoading(true);
+      const response = await axios.post('/api/events/batch/extend-deadline', {
+        eventIds: selectedEventIds,
+        newDeadline: new Date(batchDeadline).toISOString()
+      });
+
+      // Refresh events list
+      await fetchEvents();
+      
+      // Clear selection and close modal
+      setSelectedEventIds([]);
+      setShowBatchExtendModal(false);
+      setBatchDeadline('');
+      
+      // Show beautiful success notification
+      setSuccessMessage(`Successfully extended deadlines for ${selectedEventIds.length} event${selectedEventIds.length !== 1 ? 's' : ''}!`);
+      setShowSuccessNotification(true);
+      setError(''); // Clear any previous errors
+      
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to extend deadlines');
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  const handleBatchSendReminders = async () => {
+    if (selectedEventIds.length === 0) return;
+
+    try {
+      setBatchLoading(true);
+      const response = await axios.post('/api/events/batch/send-reminders', {
+        eventIds: selectedEventIds,
+        reminderMessage: reminderMessage.trim() || undefined
+      });
+
+      // Clear selection and close modal
+      setSelectedEventIds([]);
+      setShowBatchReminderModal(false);
+      setReminderMessage('');
+      
+      // Show beautiful success notification
+      setSuccessMessage(`Reminder emails sent for ${selectedEventIds.length} event${selectedEventIds.length !== 1 ? 's' : ''}!`);
+      setShowSuccessNotification(true);
+      setError(''); // Clear any previous errors
+      
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to send reminders');
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  const getTomorrowMinDate = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().slice(0, 16);
+  };
+
+  if (loading) {
+    return <PageLoadingSpinner message="Loading your dashboard..." />;
   }
 
   return (
@@ -194,9 +271,9 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Actions */}
+        {/* Events Header with Batch Actions */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-bold text-text-primary">Your Events</h2>
               <p className="text-sm text-text-secondary mt-1">
@@ -210,6 +287,60 @@ export const DashboardPage: React.FC = () => {
               + Create New Event
             </Link>
           </div>
+
+          {/* Batch Actions Bar */}
+          {events.filter(e => e.userRole === 'organizer' && e.status === 'OPEN' && !isEventExpired(e.deadline)).length > 0 && (
+            <div className="bg-surface-paper rounded-lg p-4 border border-surface-border shadow-soft">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={selectAllOwnedEvents}
+                      className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-text-tertiary">|</span>
+                    <button
+                      onClick={clearSelection}
+                      className="text-sm text-text-secondary hover:text-text-primary font-medium"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  {selectedEventIds.length > 0 && (
+                    <span className="text-sm text-text-secondary">
+                      {selectedEventIds.length} event{selectedEventIds.length !== 1 ? 's' : ''} selected
+                    </span>
+                  )}
+                </div>
+
+                {/* Batch Action Buttons */}
+                {selectedEventIds.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowBatchExtendModal(true)}
+                      className="px-3 py-2 bg-accent-sage text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Extend Deadline
+                    </button>
+                    <button
+                      onClick={() => setShowBatchReminderModal(true)}
+                      className="px-3 py-2 bg-accent-terracotta text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 3.26a2 2 0 001.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      Send Reminders
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Events List */}
@@ -240,6 +371,18 @@ export const DashboardPage: React.FC = () => {
               return (
                 <div key={event.id} className="bg-surface-paper rounded-xl p-6 border border-surface-border shadow-soft">
                   <div className="flex items-start justify-between">
+                    {/* Checkbox for owned open events */}
+                    {event.userRole === 'organizer' && event.status === 'OPEN' && !expired && (
+                      <div className="flex items-start mr-4 mt-1">
+                        <input
+                          type="checkbox"
+                          checked={selectedEventIds.includes(event.id)}
+                          onChange={() => toggleEventSelection(event.id)}
+                          className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                        />
+                      </div>
+                    )}
+                    
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-bold text-text-primary">{event.title}</h3>
@@ -456,6 +599,138 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Batch Extend Deadline Modal */}
+        {showBatchExtendModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-surface-paper rounded-xl max-w-md w-full">
+              <div className="p-6 border-b border-surface-border">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-text-primary">
+                    Extend Deadline
+                  </h3>
+                  <button
+                    onClick={() => setShowBatchExtendModal(false)}
+                    className="text-text-tertiary hover:text-text-secondary"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <p className="text-text-secondary text-sm">
+                  Extend deadline for {selectedEventIds.length} selected event{selectedEventIds.length !== 1 ? 's' : ''}:
+                </p>
+                
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
+                    New Deadline
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={batchDeadline}
+                    onChange={(e) => setBatchDeadline(e.target.value)}
+                    min={getTomorrowMinDate()}
+                    className="w-full px-3 py-2 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => setShowBatchExtendModal(false)}
+                    className="flex-1 px-4 py-2 border border-neutral-warm text-text-secondary hover:bg-neutral-warm rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleBatchExtendDeadline}
+                    disabled={!batchDeadline || batchLoading}
+                    className="flex-1 px-4 py-2 bg-accent-sage text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {batchLoading ? 'Extending...' : 'Extend Deadline'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Batch Send Reminders Modal */}
+        {showBatchReminderModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-surface-paper rounded-xl max-w-md w-full">
+              <div className="p-6 border-b border-surface-border">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-text-primary">
+                    Send Reminder Emails
+                  </h3>
+                  <button
+                    onClick={() => setShowBatchReminderModal(false)}
+                    className="text-text-tertiary hover:text-text-secondary"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6 space-y-4">
+                <p className="text-text-secondary text-sm">
+                  Send reminder emails for {selectedEventIds.length} selected event{selectedEventIds.length !== 1 ? 's' : ''}. 
+                  This will notify participants about approaching deadlines.
+                </p>
+                
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
+                    Custom Message (Optional)
+                  </label>
+                  <textarea
+                    value={reminderMessage}
+                    onChange={(e) => setReminderMessage(e.target.value)}
+                    placeholder="Add a personal note to the reminder (optional)"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-neutral-warm rounded-lg focus:ring-2 focus:ring-primary-400 focus:border-transparent bg-surface-paper text-text-primary resize-none"
+                  />
+                </div>
+
+                <div className="bg-neutral-ivory p-3 rounded-lg">
+                  <p className="text-xs text-text-secondary">
+                    <strong>Note:</strong> Reminders will only be sent for Circle Notes events where participants have registered accounts. 
+                    Individual Tribute events require manual outreach.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => setShowBatchReminderModal(false)}
+                    className="flex-1 px-4 py-2 border border-neutral-warm text-text-secondary hover:bg-neutral-warm rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleBatchSendReminders}
+                    disabled={batchLoading}
+                    className="flex-1 px-4 py-2 bg-accent-terracotta text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {batchLoading ? 'Sending...' : 'Send Reminders'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Notification */}
+        <SuccessNotification
+          message={successMessage}
+          isVisible={showSuccessNotification}
+          onClose={() => setShowSuccessNotification(false)}
+          position="top"
+        />
       </div>
     </div>
   );

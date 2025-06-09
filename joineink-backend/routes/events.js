@@ -3,7 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt');
 const { authenticateToken } = require('../middleware/auth');
-const { sendKeepsakeBookNotification, sendCircleNotesKeepsakeBookNotification } = require('../utils/email');
+const { sendKeepsakeBookNotification, sendCircleNotesKeepsakeBookNotification, sendContributorInvitation } = require('../utils/email');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -863,6 +863,213 @@ router.post('/:eventId/send-keepsake-books', authenticateToken, async (req, res)
     });
   } catch (error) {
     console.error('Send keepsake books error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Batch extend deadlines for multiple events
+router.post('/batch/extend-deadline', authenticateToken, async (req, res) => {
+  try {
+    const { eventIds, newDeadline } = req.body;
+
+    // Validate input
+    if (!eventIds || !Array.isArray(eventIds) || eventIds.length === 0) {
+      return res.status(400).json({ error: 'Event IDs array is required' });
+    }
+
+    if (!newDeadline) {
+      return res.status(400).json({ error: 'New deadline is required' });
+    }
+
+    // Validate deadline is in the future
+    const deadlineDate = new Date(newDeadline);
+    if (deadlineDate <= new Date()) {
+      return res.status(400).json({ error: 'New deadline must be in the future' });
+    }
+
+    // Get events and verify ownership
+    const events = await prisma.event.findMany({
+      where: {
+        id: { in: eventIds },
+        organizerId: req.user.userId,
+        status: 'OPEN' // Only allow extending open events
+      },
+      select: {
+        id: true,
+        title: true,
+        deadline: true
+      }
+    });
+
+    if (events.length === 0) {
+      return res.status(404).json({ error: 'No valid open events found for the provided IDs' });
+    }
+
+    // Update deadlines for all valid events
+    const updatePromises = events.map(async (event) => {
+      try {
+        await prisma.event.update({
+          where: { id: event.id },
+          data: { deadline: deadlineDate }
+        });
+
+        // Also update expiry dates for related contributor sessions
+        await prisma.contributorSession.updateMany({
+          where: { eventId: event.id },
+          data: { expiresAt: deadlineDate }
+        });
+
+        return {
+          eventId: event.id,
+          title: event.title,
+          oldDeadline: event.deadline,
+          newDeadline: deadlineDate,
+          status: 'success'
+        };
+      } catch (error) {
+        return {
+          eventId: event.id,
+          title: event.title,
+          status: 'failed',
+          error: error.message
+        };
+      }
+    });
+
+    const results = await Promise.all(updatePromises);
+    const successful = results.filter(r => r.status === 'success');
+    const failed = results.filter(r => r.status === 'failed');
+
+    res.json({
+      message: `Successfully extended deadline for ${successful.length} event(s)${failed.length > 0 ? `, ${failed.length} failed` : ''}`,
+      successful,
+      failed: failed.length > 0 ? failed : undefined,
+      newDeadline: deadlineDate
+    });
+  } catch (error) {
+    console.error('Batch extend deadline error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Batch send reminder emails for multiple events
+router.post('/batch/send-reminders', authenticateToken, async (req, res) => {
+  try {
+    const { eventIds, reminderMessage } = req.body;
+
+    // Validate input
+    if (!eventIds || !Array.isArray(eventIds) || eventIds.length === 0) {
+      return res.status(400).json({ error: 'Event IDs array is required' });
+    }
+
+    // Get events and verify ownership
+    const events = await prisma.event.findMany({
+      where: {
+        id: { in: eventIds },
+        organizerId: req.user.userId,
+        status: 'OPEN' // Only allow reminders for open events
+      },
+      include: {
+        contributorSessions: {
+          where: {
+            user: {
+              isNot: null // Only get sessions for registered users
+            }
+          },
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        organizer: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (events.length === 0) {
+      return res.status(404).json({ error: 'No valid open events found for the provided IDs' });
+    }
+
+    // Send reminder emails for each event
+    const emailPromises = events.map(async (event) => {
+      try {
+
+        
+        if (event.eventType === 'INDIVIDUAL_TRIBUTE') {
+          // For individual tribute, we need to send to people who haven't contributed yet
+          // We can't easily track individual contributors without sessions, so we'll send to the organizer
+          // to ask them to manually reach out
+          return {
+            eventId: event.id,
+            title: event.title,
+            status: 'skipped',
+            reason: 'Individual Tribute events require manual contributor outreach'
+          };
+        } else if (event.eventType === 'CIRCLE_NOTES') {
+          // For Circle Notes, send reminders to all participants
+          const participantEmails = [];
+          
+          for (const session of event.contributorSessions) {
+            if (session.user) {
+              const contributorUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/contribute/${session.token}`;
+              
+              try {
+                await sendContributorInvitation(
+                  session.user.email,
+                  event.title,
+                  contributorUrl,
+                  event.organizer.name,
+                  event.deadline
+                );
+                participantEmails.push(session.user.email);
+              } catch (emailError) {
+                console.error(`Failed to send reminder to ${session.user.email}:`, emailError);
+              }
+            }
+          }
+          
+          return {
+            eventId: event.id,
+            title: event.title,
+            status: 'success',
+            remindersSent: participantEmails.length,
+            recipients: participantEmails
+          };
+        }
+      } catch (error) {
+        return {
+          eventId: event.id,
+          title: event.title,
+          status: 'failed',
+          error: error.message
+        };
+      }
+    });
+
+    const results = await Promise.all(emailPromises);
+    const successful = results.filter(r => r.status === 'success');
+    const failed = results.filter(r => r.status === 'failed');
+    const skipped = results.filter(r => r.status === 'skipped');
+    
+    const totalReminders = successful.reduce((sum, result) => sum + (result.remindersSent || 0), 0);
+
+    res.json({
+      message: `Sent ${totalReminders} reminder emails across ${successful.length} event(s)${failed.length > 0 ? `, ${failed.length} failed` : ''}${skipped.length > 0 ? `, ${skipped.length} skipped` : ''}`,
+      successful,
+      failed: failed.length > 0 ? failed : undefined,
+      skipped: skipped.length > 0 ? skipped : undefined,
+      totalReminders
+    });
+  } catch (error) {
+    console.error('Batch send reminders error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

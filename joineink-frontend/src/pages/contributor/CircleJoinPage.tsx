@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { PageLoadingSpinner } from '../../components/common/LoadingSpinner';
 import axios from 'axios';
 
 interface Event {
@@ -143,19 +144,7 @@ export const CircleJoinPage: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-neutral-cream to-neutral-ivory p-6 flex items-center justify-center">
-        <div className="bg-surface-paper rounded-2xl shadow-soft-lg p-8 border border-surface-border max-w-lg w-full">
-          <div className="animate-pulse">
-            <div className="h-8 bg-neutral-warm rounded w-3/4 mb-4"></div>
-            <div className="h-4 bg-neutral-warm rounded w-full mb-2"></div>
-            <div className="h-4 bg-neutral-warm rounded w-2/3 mb-6"></div>
-            <div className="h-10 bg-neutral-warm rounded w-full mb-4"></div>
-            <div className="h-10 bg-neutral-warm rounded w-full"></div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageLoadingSpinner message="Loading circle session..." />;
   }
 
   if (error && !joinInfo) {
