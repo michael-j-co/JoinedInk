@@ -194,7 +194,6 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
 
       {/* Enhanced Preview */}
       <div className="pt-6 border-t border-gray-200">
-        <h4 className="text-md font-medium text-gray-900 mb-3">Preview Your Choice</h4>
         <div className="p-4 rounded-lg border border-gray-200 bg-white shadow-sm">
           <div
             className={`p-6 rounded-lg ${
@@ -208,17 +207,7 @@ export const BackgroundSelector: React.FC<BackgroundSelectorProps> = ({
                 : themes.find(t => t.id === selectedTheme)?.preview
             }}
           >
-            <h5 className="font-medium text-gray-900 mb-2">Sample Message</h5>
-            <p className="text-gray-700 text-sm leading-relaxed mb-4">
-              This is how your message will look with the "{themes.find(t => t.id === selectedTheme)?.name}" background theme. 
-              The theme creates a gentle, sentimental atmosphere while keeping your text readable and beautiful.
-            </p>
-            <div className="flex justify-between items-center">
-              <div className="text-xs text-gray-500">Sample image or sticker would appear here</div>
-              <div className="mt-2 pt-3 border-t border-gray-300">
-                <p className="text-sm text-gray-600 italic">— Your Name</p>
-              </div>
-            </div>
+
           </div>
         </div>
       </div>

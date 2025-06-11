@@ -6,8 +6,8 @@ import { NoteContent, BackgroundTheme } from '../../types';
 import { createSafeHtml } from '../../utils/sanitizeHtml';
 import { PageLoadingSpinner, OverlayLoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
-import { ContributionProgressIndicator } from '../../components/common/ProgressIndicator';
-import { SuccessAnimation } from '../../components/common/LoadingSpinner';
+
+
 import { Breadcrumb } from '../../components/common/Breadcrumb';
 import axios from 'axios';
 
@@ -46,7 +46,6 @@ export const ContributorPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [confirmationType, setConfirmationType] = useState<'message-submitted' | 'message-updated'>('message-submitted');
   
 
   
@@ -61,15 +60,13 @@ export const ContributorPage: React.FC = () => {
   const [useGlobalSettings, setUseGlobalSettings] = useState(true);
   const [showNameSettings, setShowNameSettings] = useState(false);
   
-  // Animation states
+  // Simple transition state
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [showCompletionAnimation, setShowCompletionAnimation] = useState(false);
+  const [hasCompletedCircle, setHasCompletedCircle] = useState(false);
   
-  // Progress tracking
-  const [progressStep, setProgressStep] = useState<'writing' | 'adding-media' | 'preview' | 'submitting' | 'complete'>('writing');
+
   
-  // Success animation
-  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+
   
   // Ref to store the latest content from NoteEditor
   const latestContentRef = useRef<NoteContent | null>(null);
@@ -96,6 +93,11 @@ export const ContributorPage: React.FC = () => {
       // Initialize submitted recipients from the completed list
       if (response.data.completedRecipients?.length > 0) {
         setSubmittedRecipients(new Set(response.data.completedRecipients));
+        
+        // If all recipients already have messages, mark circle as completed
+        if (response.data.completedRecipients.length === response.data.recipients.length) {
+          setHasCompletedCircle(true);
+        }
       }
       
       // For Individual Tribute, select the first (and only) recipient
@@ -120,6 +122,12 @@ export const ContributorPage: React.FC = () => {
   };
 
   const handleRecipientChange = (recipient: Recipient) => {
+    // Safety check to prevent undefined recipient
+    if (!recipient) {
+      console.error('handleRecipientChange called with undefined recipient');
+      return;
+    }
+    
     // Save current content as draft for previous recipient (use latest from ref)
     if (selectedRecipient) {
       const contentToSave = latestContentRef.current || currentContent;
@@ -196,129 +204,7 @@ export const ContributorPage: React.FC = () => {
     { id: 'thanksgiving-warmth', name: 'Thanksgiving Warmth', preview: 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)', cssClass: '', gradient: 'bg-gradient-to-br from-orange-50 to-orange-200' },
   ];
 
-  // Custom save function for Ctrl+Enter that always goes to next recipient in order
-  const handleSaveWithCustomNavigation = async (content: NoteContent) => {
-    if (!selectedRecipient || !sessionInfo || !token) return;
-    
-    // Validate content before submitting
-    if (!content.text?.trim() && (!content.media || content.media.length === 0) && 
-        (!content.drawings || content.drawings.length === 0) && !content.signature) {
-      alert('Please add some content to your message before submitting.');
-      return;
-    }
-    
-    setIsSubmitting(true);
-    try {
-      const formData = new FormData();
-      formData.append('contributorToken', token);
-      formData.append('recipientId', selectedRecipient.id);
-      formData.append('content', content.text || '');
-      formData.append('contributorName', content.contributorName || '');
-      formData.append('fontFamily', content.formatting?.fontFamily || '');
-      formData.append('backgroundColor', content.backgroundColor || '');
-      
-      // Handle signature
-      if (content.signature?.data) {
-        formData.append('signature', JSON.stringify(content.signature));
-      }
-      
-      // Handle drawings
-      if (content.drawings && content.drawings.length > 0) {
-        formData.append('drawings', JSON.stringify(content.drawings));
-      }
-      
-      // Handle media items (images, GIFs, stickers)
-      if (content.media && content.media.length > 0) {
-        const mediaData = content.media.map(item => ({
-          id: item.id,
-          type: item.type,
-          url: item.url,
-          alt: item.alt,
-          width: item.width,
-          height: item.height,
-          position: item.position
-        }));
-        formData.append('media', JSON.stringify(mediaData));
-      }
-      
-      // Handle uploaded image files (if any are local blobs)
-      if (content.media) {
-        let imageIndex = 0;
-        for (const mediaItem of content.media) {
-          if (mediaItem.type === 'image' && mediaItem.url.startsWith('blob:')) {
-            try {
-              const response = await fetch(mediaItem.url);
-              const blob = await response.blob();
-              formData.append(`images`, blob, `image-${mediaItem.id}.png`);
-              imageIndex++;
-            } catch (error) {
-              console.warn('Failed to process image blob:', error);
-            }
-          }
-        }
-      }
-      
-      // Add additional formatting data
-      formData.append('formatting', JSON.stringify({
-        fontFamily: content.formatting?.fontFamily,
-        fontSize: content.formatting?.fontSize,
-        bold: content.formatting?.bold,
-        italic: content.formatting?.italic
-      }));
-      
-      // Submit the message
-      await axios.post('/api/contributions/submit', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      
-      // Mark this recipient as submitted but keep the draft for editing
-      setSubmittedRecipients(prev => new Set(Array.from(prev).concat(selectedRecipient.id)));
-      
-      // Keep the content in drafts for future editing
-      setRecipientDrafts(prev => ({
-        ...prev,
-        [selectedRecipient.id]: content
-      }));
-      
-      // Update session info to reflect the completion (only if not already completed)
-      if (sessionInfo && !sessionInfo.completedRecipients.includes(selectedRecipient.id)) {
-        setSessionInfo(prev => prev ? {
-          ...prev,
-          completedRecipients: [...prev.completedRecipients, selectedRecipient.id]
-        } : null);
-      }
-      
-      // Custom navigation: Always go to next recipient in order (Ctrl+Enter behavior)
-      if (sessionInfo.event.eventType === 'CIRCLE_NOTES') {
-        const currentIndex = sessionInfo.recipients.findIndex(r => r.id === selectedRecipient.id);
-        const nextIndex = (currentIndex + 1) % sessionInfo.recipients.length; // Wrap around to first if at end
-        const nextRecipient = sessionInfo.recipients[nextIndex];
-        
-        // Navigate to next recipient immediately
-        handleRecipientChange(nextRecipient);
-      }
-      
-    } catch (error: any) {
-      console.error('Error saving contribution:', error);
-      
-      // Provide specific error messages based on the error type
-      let errorMessage = 'There was an error submitting your message. Please try again.';
-      
-      if (error.response?.status === 400 && error.response.data?.error?.includes('already submitted')) {
-        errorMessage = 'You have already submitted a message for this person.';
-      } else if (error.response?.status === 410) {
-        errorMessage = error.response.data?.error || 'This event has expired or been closed.';
-      } else if (error.response?.status === 413) {
-        errorMessage = 'Your message is too large. Please reduce the number or size of images and try again.';
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      }
-      
-      alert(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+
 
   const handleSave = async (content: NoteContent) => {
     if (!selectedRecipient || !sessionInfo || !token) return;
@@ -330,8 +216,17 @@ export const ContributorPage: React.FC = () => {
       return;
     }
     
+    // Start transition animation immediately for visual feedback
+    if (sessionInfo.event.eventType === 'CIRCLE_NOTES') {
+      const currentIndex = sessionInfo.recipients.findIndex(r => r.id === selectedRecipient.id);
+      const isLastRecipient = currentIndex === sessionInfo.recipients.length - 1;
+      
+      if (!isLastRecipient) {
+        setIsTransitioning(true);
+      }
+    }
+    
     setIsSubmitting(true);
-    setProgressStep('submitting');
     try {
       const formData = new FormData();
       formData.append('contributorToken', token);
@@ -425,57 +320,36 @@ export const ContributorPage: React.FC = () => {
         } : null);
       }
       
-      // Update progress and show success animation and confirmation modal
-      setProgressStep('complete');
-      setShowSuccessAnimation(true);
-      setConfirmationType(isUpdate ? 'message-updated' : 'message-submitted');
-      setShowConfirmation(true);
-      
-      // Auto-navigate to next recipient with smooth animations
+            // Handle navigation after save completes
       if (sessionInfo.event.eventType === 'CIRCLE_NOTES') {
-        // Find the next recipient that hasn't been submitted to yet
         const currentIndex = sessionInfo.recipients.findIndex(r => r.id === selectedRecipient.id);
-        const nextUnsubmittedRecipient = sessionInfo.recipients
-          .slice(currentIndex + 1) // Start from the next recipient
-          .find(recipient => !submittedRecipients.has(recipient.id));
+        const isLastRecipient = currentIndex === sessionInfo.recipients.length - 1;
         
-        if (nextUnsubmittedRecipient) {
-          // Navigate to next unsubmitted recipient with animation
-          setTimeout(() => {
-            setIsTransitioning(true);
+        if (isLastRecipient) {
+          // On last recipient, always go to participant view
+          if (!hasCompletedCircle) {
+            // First time - show celebration animation
+            setHasCompletedCircle(true);
+            setShowConfirmation(true);
             setTimeout(() => {
-              handleRecipientChange(nextUnsubmittedRecipient);
-              setIsTransitioning(false);
-            }, 300); // Fade out duration
-          }, 2000); // Give time for confirmation modal to be seen
-        } else {
-          // Check if there are any unsubmitted recipients from the beginning
-          const anyUnsubmittedRecipient = sessionInfo.recipients
-            .find(recipient => !submittedRecipients.has(recipient.id));
-          
-          if (anyUnsubmittedRecipient) {
-            // Navigate to first unsubmitted recipient with animation
-            setTimeout(() => {
-              setIsTransitioning(true);
-              setTimeout(() => {
-                handleRecipientChange(anyUnsubmittedRecipient);
-                setIsTransitioning(false);
-              }, 300);
+              setSelectedRecipient(null);
+              setCurrentContent(null);
             }, 2000);
           } else {
-            // All recipients have messages, show beautiful completion confirmation
+            // Subsequent times - just go back without animation
+            setSelectedRecipient(null);
+            setCurrentContent(null);
+          }
+        } else {
+          // Wait for transition animation to complete, then navigate
+          const nextRecipient = sessionInfo.recipients[currentIndex + 1];
+          if (nextRecipient) {
             setTimeout(() => {
-              setConfirmationType('message-submitted');
-              setShowConfirmation(false); // Close current confirmation
-              setTimeout(() => {
-                setShowCompletionAnimation(true);
-              }, 300);
-            }, 2000);
+              handleRecipientChange(nextRecipient);
+              setIsTransitioning(false);
+            }, 300); // Match the transition duration
           }
         }
-      } else {
-        // For Individual Tribute, just stay on the current message
-        // Could potentially show a completion message here
       }
       
     } catch (error: any) {
@@ -502,7 +376,6 @@ export const ContributorPage: React.FC = () => {
 
   const handlePreview = (content: NoteContent) => {
     setCurrentContent(content);
-    setProgressStep('preview');
     setShowPreview(true);
   };
 
@@ -510,17 +383,6 @@ export const ContributorPage: React.FC = () => {
     // Store the latest content in ref for immediate access
     latestContentRef.current = content;
     setCurrentContent(content);
-    
-    // Update progress based on content
-    if (content.text?.trim() || content.media?.length || content.drawings?.length || content.signature) {
-      if (content.media?.length || content.drawings?.length) {
-        setProgressStep('adding-media');
-      } else {
-        setProgressStep('writing');
-      }
-    } else {
-      setProgressStep('writing');
-    }
     
     // Auto-save draft for current recipient
     if (selectedRecipient) {
@@ -623,57 +485,60 @@ export const ContributorPage: React.FC = () => {
     return sessionInfo ? currentIndex < sessionInfo.recipients.length - 1 : false;
   }, [getCurrentRecipientIndex, sessionInfo]);
 
-  // Add keyboard shortcuts for navigation and submission
+  // Add keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Only handle shortcuts when on the editor page (selectedRecipient exists)
+      // Only handle shortcuts when on the editor page
       if (!selectedRecipient) return;
 
-      // Ctrl/Cmd + Enter = Submit/Update and move to next
+      // Ctrl/Cmd + Enter = Save/Update message
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault();
-        // Get the latest content and submit
-        const contentToSubmit = latestContentRef.current || currentContent;
-        if (contentToSubmit) {
-          // Submit the message but handle navigation ourselves
-          handleSaveWithCustomNavigation(contentToSubmit);
+        // Get the latest content and save
+        const contentToSave = latestContentRef.current || currentContent;
+        if (contentToSave) {
+          handleSave(contentToSave);
         }
         return;
       }
 
-      // Only handle navigation shortcuts when NOT typing in an input/textarea/contenteditable
+      // Only handle navigation shortcuts when NOT typing in input/textarea/contenteditable
       if (event.target instanceof HTMLInputElement || 
           event.target instanceof HTMLTextAreaElement ||
           (event.target as HTMLElement)?.contentEditable === 'true') {
         return;
       }
 
-      // Ctrl/Cmd + Left Arrow = Previous
+      // Ctrl/Cmd + Left Arrow = Previous recipient
       if ((event.ctrlKey || event.metaKey) && event.key === 'ArrowLeft') {
         event.preventDefault();
         if (canNavigatePrevious()) {
-          // Small delay to ensure any pending content changes are captured
+          setIsTransitioning(true);
           setTimeout(() => {
             navigateToPrevious();
-          }, 100);
+            setIsTransitioning(false);
+          }, 150);
         }
       }
       
-      // Ctrl/Cmd + Right Arrow = Next
+      // Ctrl/Cmd + Right Arrow = Next recipient
       if ((event.ctrlKey || event.metaKey) && event.key === 'ArrowRight') {
         event.preventDefault();
         if (canNavigateNext()) {
-          // Small delay to ensure any pending content changes are captured
+          setIsTransitioning(true);
           setTimeout(() => {
             navigateToNext();
-          }, 100);
+            setIsTransitioning(false);
+          }, 150);
         }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedRecipient, currentContent, canNavigatePrevious, canNavigateNext, navigateToPrevious, navigateToNext, handleSaveWithCustomNavigation]);
+  }, [selectedRecipient, currentContent, handleSave, canNavigatePrevious, canNavigateNext, navigateToPrevious, navigateToNext]);
+
+
 
   const formatDeadline = (deadline: string) => {
     return new Date(deadline).toLocaleDateString('en-US', {
@@ -1074,16 +939,7 @@ export const ContributorPage: React.FC = () => {
         <Breadcrumb items={contributionBreadcrumbs} className="mb-4" />
       </div>
 
-      {/* Progress Indicator */}
-      {selectedRecipient && (
-        <div className="max-w-4xl mx-auto px-4">
-          <ContributionProgressIndicator
-            currentStep={progressStep}
-            recipientName={selectedRecipient.name}
-            className="mb-6"
-          />
-        </div>
-      )}
+
 
       {/* Clean Navigation Bar for Circle Notes */}
       {sessionInfo.event.eventType === 'CIRCLE_NOTES' && selectedRecipient && (
@@ -1104,31 +960,47 @@ export const ContributorPage: React.FC = () => {
               {/* Center - Current participant with navigation */}
               <div className="flex items-center gap-4">
                 <button
-                  onClick={navigateToPrevious}
+                  onClick={() => {
+                    setIsTransitioning(true);
+                    setTimeout(() => {
+                      navigateToPrevious();
+                      setIsTransitioning(false);
+                    }, 150);
+                  }}
                   disabled={!canNavigatePrevious()}
-                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 hover:text-gray-800 transition-all"
-                  title="Previous participant (Ctrl/Cmd + ←)"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 hover:text-gray-800 transition-all text-sm"
+                  title="Previous participant"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
+                  <span className="hidden sm:inline">Previous</span>
                 </button>
                 
-                <div className="text-center">
+                <div className="text-center px-4">
                   <div className="font-semibold text-gray-900">{selectedRecipient.name}</div>
                   <div className="text-xs text-gray-500">
-                    {getCurrentRecipientIndex() + 1} of {sessionInfo.recipients.length} •{' '}
-                    {sessionInfo.completedRecipients.length} completed
+                    {getCurrentRecipientIndex() + 1} of {sessionInfo.recipients.length}
+                    {submittedRecipients.has(selectedRecipient.id) && (
+                      <span className="ml-2 text-green-600">✓ Sent</span>
+                    )}
                   </div>
                 </div>
                 
                 <button
-                  onClick={navigateToNext}
+                  onClick={() => {
+                    setIsTransitioning(true);
+                    setTimeout(() => {
+                      navigateToNext();
+                      setIsTransitioning(false);
+                    }, 150);
+                  }}
                   disabled={!canNavigateNext()}
-                  className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 hover:text-gray-800 transition-all"
-                  title="Next participant (Ctrl/Cmd + →)"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 hover:text-gray-800 transition-all text-sm"
+                  title="Next participant"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span className="hidden sm:inline">Next</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
@@ -1146,12 +1018,10 @@ export const ContributorPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Keyboard shortcuts hint */}
+            {/* Event info with shortcut hints */}
             <div className="mt-2 text-center">
               <div className="text-xs text-gray-400">
-                <span className="hidden md:inline">Ctrl/Cmd + Enter: Submit & Next • </span>
-                <span className="hidden lg:inline">Ctrl/Cmd + ← →: Navigate • </span>
-                Writing for {sessionInfo.event.title}
+                Writing for {sessionInfo.event.title} • Ctrl+Enter: save • Ctrl+←→: navigate
               </div>
             </div>
           </div>
@@ -1160,49 +1030,31 @@ export const ContributorPage: React.FC = () => {
 
       
 
-      {/* Beautiful Confirmation Modal */}
+      {/* Completion Modal (only for last recipient) */}
       <ConfirmationModal
         isOpen={showConfirmation}
         onClose={() => setShowConfirmation(false)}
-        type={confirmationType}
-        recipientName={selectedRecipient?.name}
-        eventTitle={sessionInfo?.event.title}
-        autoClose={true}
-        autoCloseDelay={4000}
-      />
-
-      {/* Circle Completion Modal */}
-      <ConfirmationModal
-        isOpen={showCompletionAnimation}
-        onClose={() => {
-          setShowCompletionAnimation(false);
-          setSelectedRecipient(null);
-          setCurrentContent(null);
-        }}
         type="circle-complete"
         eventTitle={sessionInfo?.event.title}
+        autoClose={false}
         nextAction={{
           text: "View All Messages",
           onClick: () => {
-            setShowCompletionAnimation(false);
+            setShowConfirmation(false);
             setSelectedRecipient(null);
             setCurrentContent(null);
           }
         }}
-        autoClose={false}
       />
 
-      {/* Transition Overlay */}
+
+
+      {/* Smooth Transition Overlay */}
       {isTransitioning && (
-        <OverlayLoadingSpinner message="Loading next message..." />
+        <OverlayLoadingSpinner message="Moving to next recipient..." />
       )}
 
-      {/* Success Animation */}
-      <SuccessAnimation
-        isVisible={showSuccessAnimation}
-        onComplete={() => setShowSuccessAnimation(false)}
-        message="Message sent successfully!"
-      />
+
 
       {/* Name Settings Panel - Now as a separate floating card when needed */}
       {sessionInfo.event.eventType === 'CIRCLE_NOTES' && showNameSettings && (

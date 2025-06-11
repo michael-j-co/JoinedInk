@@ -11,7 +11,7 @@ import {
 export interface ConfirmationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  type: 'message-submitted' | 'message-updated' | 'event-created' | 'circle-complete' | 'keepsake-sent' | 'custom';
+  type: 'message-submitted' | 'message-updated' | 'all-messages-updated' | 'event-created' | 'circle-complete' | 'keepsake-sent' | 'custom';
   title?: string;
   message?: string;
   recipientName?: string;
@@ -83,6 +83,14 @@ const getConfirmationContent = (type: string, recipientName?: string, eventTitle
           : 'Your message has been updated successfully. Every word will be cherished.',
         theme: 'success' as const,
         emoji: '✨'
+      };
+      
+    case 'all-messages-updated':
+      return {
+        title: '🎊 All Messages Updated!',
+        message: 'You\'ve finished updating all your messages! Your heartfelt words have been saved and will create beautiful memories.',
+        theme: 'celebration' as const,
+        emoji: '🌟'
       };
       
     case 'event-created':

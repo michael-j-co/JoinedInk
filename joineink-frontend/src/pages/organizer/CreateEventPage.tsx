@@ -132,30 +132,48 @@ export const CreateEventPage: React.FC = () => {
       <div className="max-w-4xl mx-auto">
         {/* Progress Steps */}
         <div className="mb-8">
-          <div className="flex items-center justify-center space-x-4">
-            {[1, 2, 3, 4].map((step) => (
-              <div key={step} className="flex items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  currentStep >= step 
-                    ? 'bg-primary-500 text-white' 
-                    : 'bg-neutral-warm text-text-tertiary'
-                }`}>
-                  {step}
+          <div className="flex items-center justify-center">
+            {[1, 2, 3, 4].map((step, index) => (
+              <React.Fragment key={step}>
+                {/* Step Circle */}
+                <div className="relative flex items-center justify-center">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-all duration-200 ${
+                    currentStep >= step 
+                      ? 'bg-primary-500 text-white border-primary-500' 
+                      : 'bg-white text-text-tertiary border-neutral-warm'
+                  }`}>
+                    {currentStep > step ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <span className="font-semibold">{step}</span>
+                    )}
+                  </div>
                 </div>
-                {step < 4 && (
-                  <div className={`w-12 h-1 ${
-                    currentStep > step ? 'bg-primary-500' : 'bg-neutral-warm'
-                  }`} />
+                
+                {/* Connecting Line */}
+                {index < 3 && (
+                  <div className="flex-1 mx-2 max-w-[80px]">
+                    <div className={`h-0.5 w-full transition-all duration-300 ${
+                      currentStep > step ? 'bg-primary-500' : 'bg-neutral-warm'
+                    }`} />
+                  </div>
                 )}
-              </div>
+              </React.Fragment>
             ))}
           </div>
-          <div className="text-center mt-4">
-            <div className="text-sm text-text-secondary">
+          
+          {/* Step Labels */}
+          <div className="text-center mt-6">
+            <div className="text-sm font-medium text-text-secondary">
               {currentStep === 1 && "Step 1: Event Type Selection"}
               {currentStep === 2 && "Step 2: Event Details"}
               {currentStep === 3 && "Step 3: Preview & Confirm"}
               {currentStep === 4 && "Step 4: Event Created Successfully"}
+            </div>
+            <div className="text-xs text-text-muted mt-1">
+              {Math.round((currentStep / 4) * 100)}% Complete
             </div>
           </div>
         </div>
